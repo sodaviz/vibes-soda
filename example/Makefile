@@ -6,7 +6,7 @@
 ###
 
 .PHONY: build
-build: builddir build/index.html
+build: builddir
 	npx tsc --build tsconfig.json
 	npx esbuild js/main.js --bundle --outfile=build/main.js
 	npx pug-cli -P src/index.pug -o build/
@@ -28,9 +28,6 @@ serve: build
 
 builddir:
 	mkdir -p build/
-
-build/index.html: index.html
-	cp index.html build/
 
 ## This lives way down here because it screws up the syntax highlighting
 ## for the rest of the file if it's higher up. Basically, we just grep

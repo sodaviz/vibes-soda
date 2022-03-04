@@ -55,3 +55,16 @@ async function getBacteriaNames(): Promise<vs.VibesBacteriaNameRecord[]> {
 }
 
 getBacteriaNames().then((records) => populateBacteriaList(records));
+
+let collapsibleElements = document.getElementsByClassName("collapsible");
+for (let i = 0; i < collapsibleElements.length; i++) {
+  collapsibleElements[i].addEventListener("click", function (this: any) {
+    this.classList.toggle("active");
+    let content = this.nextElementSibling;
+    if (content.style.maxHeight) {
+      content.style.maxHeight = null;
+    } else {
+      content.style.maxHeight = content.scrollHeight + "px";
+    }
+  });
+}
