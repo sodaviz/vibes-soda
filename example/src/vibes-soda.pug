@@ -1,0 +1,47 @@
+h1 vibes-soda
+button.collapsible info
+.example-text.content
+  p
+    | The source code for this example can be found on 
+    a(href="https://github.com/sodaviz/vibes-soda") GitHub
+  p 
+    | VIBES-SODA is a relatively complicated interface for visualizing the results of analysis with our VIBES pipeline (not yet publicly available). 
+    | VIBES produces annotations of full or partial integrations of phage sequence detected in bacterial genomes.
+  p 
+    | The VIBES pipeline accepts a batch of bacterial genomes and a batch of phage genomes, and identifies regions in the bacterial genomes that appear to be the result of phage integration. 
+    | One output from VIBES is a representation, for each bacterial genome, of the locations of inferred phage integration. 
+    | Another VIBES output is, for each phage genome, a nucleotode-precision representation of the frequency with which each nucleotide is part of an observed integration (some phage regions appear to be integrated or retained much more than others). 
+    | VIBES also identifies all Swiss-Prot and Pfam annotations for each phage genome.
+  p 
+    | Once a genome has been selected from the search bar, several figures will begin to render. 
+    | At the top of the visualization, you will find a chart that represents a linearized version of the selected bacterial genome. 
+    | The top row of the linear chart displays annotations of phage integrations to the bacterial genome as identified by VIBES, and the bottom row displays gene annotations (acquired from an externally-sourced GTF file). 
+    | The linear chart can be zoomed with ctrl+scroll and panned by clicking and dragging. 
+    | At the top zoom level, the gene annotations are condensed into groups based off of proximity in the chromosome. 
+    | As the zoom level increases, the gene annotations are continuously re-rendered as more horizontal screen real estate enables finer-grained display.
+  p 
+    | Below the linear chart on the left is a radial representation of the bacterial genome. 
+    | Here, phage integrations are shown on the outer ring and a condensed representation of gene annotations are on the inner ring (this gene annotation representation is a work-in-progress). 
+    | The radial chart can also be zoomed with ctrl+scroll and panned by clicking and dragging. 
+    | As the linear chart is zoomed and panned, a brush is drawn on the radial chart that highlights the region of the bacterial genome that is currently shown in the linear view.
+  p 
+    | On both the linear and radial charts, a single phage integration is highlighted blue, indicating that it is currently "active". 
+    | The active annotation determines the contents of the occurrences plot, which is directly to the right of the radial chart. 
+    | The top of the occurrences plot displays the position-specific integration frequencies of the phage responsible for the current active annotation. 
+    | The region of the phage genome that was identified in the current bacterial genome is highlighted in blue. 
+    | The bottom of the occurrences plot annotates genes along the entirety of the phage genome. 
+    | The active annotation can be switched by clicking on phage annotations on either the linear or radial chart, or by pressing the buttons that appear when hovering over the radial chart.
+  p 
+    | Finally, at the bottom of the visualization is a simple table that describes the gene annotations across the active phage genome. 
+    | Clicking on one annotation (colored bar) in the occurrences plot will cause the corresponding entry to be highlighted in the table.
+
+.info 
+  p 
+    b To use the visualization, input the name of a bacterial genome in the search bar (hint: start typing "pseudomonas" and select the desired genome from the dropdown box).
+
+.field
+  input(type="text", autocomplete="off", required)#bacteria-selection.input-text
+  span.floating-label Bacteria 
+  
+#charts(style="margin-left: 25%; margin-right: 25%")
+script(src="main.js")
