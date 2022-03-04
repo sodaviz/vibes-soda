@@ -119,6 +119,10 @@ export class VibesContainer {
           text: (d) => `${d.a.alias}`,
         });
       },
+      postRender(): void {
+        this.defaultPostRender();
+        setChartHighlight(container.radialBacteriaChart, this);
+      },
       postZoom(): void {
         clearTimeout(container.linearChartTimeoutId);
         container.linearChartTimeoutId = setTimeout(() => {
@@ -126,14 +130,10 @@ export class VibesContainer {
             ...this.renderParams,
             initializeXScale: false,
           });
+          container.addActiveAnnotationOutline();
         }, 500);
-
-        let domain = this.xScale.domain();
-        container.radialBacteriaChart.highlight({
-          start: domain[0],
-          end: domain[1],
-          selector: "linear-bacteria-highlight",
-        });
+        
+        setChartHighlight(container.radialBacteriaChart, this);
       },
     });
 
@@ -146,7 +146,7 @@ export class VibesContainer {
       inRender(params): void {
         let thisCasted = <
           soda.Contrib.RadialChart<VibesBacteriaChartRenderParams>
-        >this;
+          >this;
         soda.Contrib.radialRectangle({
           chart: thisCasted,
           annotations: params.annotations,
@@ -182,6 +182,10 @@ export class VibesContainer {
           text: (d) => `${d.a.alias}`,
         });
       },
+      postRender(): void {
+        this.defaultPostRender();
+        setChartHighlight(container.linearBacteriaChart, this);
+      },
       postZoom(): void {
         clearTimeout(container.radialChartTimeoutId);
         container.radialChartTimeoutId = setTimeout(() => {
@@ -189,14 +193,10 @@ export class VibesContainer {
             ...this.renderParams,
             initializeXScale: false,
           });
+          container.addActiveAnnotationOutline();
         }, 500);
-
-        let domain = this.xScale.domain();
-        container.linearBacteriaChart.highlight({
-          start: domain[0],
-          end: domain[1],
-          selector: "radial-bacteria-highlight",
-        });
+        
+        setChartHighlight(container.linearBacteriaChart, this);
       },
     });
 
@@ -264,7 +264,7 @@ export class VibesContainer {
         soda.linePlot({
           chart: this,
           annotations: [occurrenceSlice!],
-          strokeColor: "cyan",
+          strokeColor: container.occurrenceFillColor,
           selector: "occurrence-plot-slice",
           rowSpan: plotRows - horizontalAxisRowSpan,
           domain: [0, params.occurrences.maxValue],
@@ -290,8 +290,7 @@ export class VibesContainer {
         if (this._renderParams) {
           this.divHeight = undefined;
           this.render(this._renderParams);
-        }
-        else {
+        } else {
           this.divHeight = container.radialBacteriaChart.divHeight;
           this.updateDivProperties();
         }
@@ -410,6 +409,7 @@ export class VibesContainer {
     this.linearBacteriaChart.render(bacteriaRenderParams);
     this.radialBacteriaChart.render(bacteriaRenderParams);
 
+
     soda.hoverBehavior({
       annotations: params.phageAnnotations,
       mouseover(s): void {
@@ -431,7 +431,7 @@ export class VibesContainer {
     this.setActiveAnnotation(params.phageAnnotations[0]);
   }
 
-  public setActiveAnnotation(annotation: VibesBacteriaAnnotation) {
+  public removeActiveAnnotationOutline() {
     if (this.activeAnnotation != undefined) {
       let glyphs = <d3.Selection<any, any, any, any>[]>(
         soda.queryGlyphMap(this.activeAnnotation)
@@ -440,14 +440,24 @@ export class VibesContainer {
         glyph.style("stroke", "none");
       }
     }
+  }
 
-    let glyphs = <d3.Selection<any, any, any, any>[]>(
-      soda.queryGlyphMap(annotation)
-    );
+  public addActiveAnnotationOutline() {
+    if (this.activeAnnotation != undefined) {
+      let glyphs = <d3.Selection<any, any, any, any>[]>(
+        soda.queryGlyphMap(this.activeAnnotation)
+      );
 
-    for (const glyph of glyphs) {
-      glyph.style("stroke", "cyan");
+      for (const glyph of glyphs) {
+        glyph.style("stroke", this.occurrenceFillColor);
+      }
     }
+  }
+
+  public setActiveAnnotation(annotation: VibesBacteriaAnnotation) {
+    this.removeActiveAnnotationOutline();
+    this.activeAnnotation = annotation;
+    this.addActiveAnnotationOutline();
 
     let idx = 0;
     for (const [i, occurrence] of this.occurrencesCache.entries()) {
@@ -456,7 +466,6 @@ export class VibesContainer {
         break;
       }
     }
-    this.activeAnnotation = annotation;
     this.occurrencesChart.render({
       ...this.occurrencesCache[idx],
       virusStart: annotation.virusStart,
@@ -579,7 +588,7 @@ function aggregateBacteriaGenes(
 
   let tolerance = 1000 / chart.transform.k;
   if (tolerance < 10) {
-    return { individual: annotations, aggregated: [] };
+    return {individual: annotations, aggregated: []};
   }
   let aggregated = soda.aggregateIntransitive({
     annotations,
@@ -597,5 +606,14 @@ function aggregateBacteriaGenes(
 
   aggregated = aggregated.filter((a) => a.group.length > 1);
 
-  return { individual, aggregated };
+  return {individual, aggregated};
+}
+
+function setChartHighlight(highlightedChart: soda.Chart<any>, representedChart: soda.Chart<any>) {
+  let domain = representedChart.xScale.domain();
+  highlightedChart.highlight({
+    start: domain[0],
+    end: domain[1],
+    selector: "bacteria-highlight",
+  });
 }
