@@ -1,0 +1,22 @@
+{
+  "name": "vibes-soda-example",
+  "version": "1.0.0",
+  "description": "An example usage of vibes-soda",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jack Roddy",
+  "license": "ISC",
+  "dependencies": {
+    "@sodaviz/vibes-soda": "file:..",
+    "autocompleter": "^6.1.2",
+    "pug-cli": "^1.0.0-alpha6",
+    "spin.js": "^4.1.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.14.24",
+    "source-map-loader": "^1.0.0",
+    "typescript": "^3.9.7"
+  }
+}

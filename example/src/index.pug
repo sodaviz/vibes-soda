@@ -1,0 +1,21 @@
+html
+  head
+    title vibes-soda
+    link(rel="stylesheet", href="https://sodaviz.org/media/styles.css")
+    link(rel="stylesheet", href="spin.css")
+  body
+    block header
+      h1 dfam-soda
+      button.collapsible info
+      .example-text.content
+        p
+          | The source code for this example can be found on 
+          a(href="https://github.com/sodaviz/vibes-soda") GitHub
+        br
+
+    block content
+      .field
+        input(type="text", autocomplete="off", required)#bacteria-selection.input-text
+        span.floating-label Bacteria 
+    #charts(style="margin-left: 25%; margin-right: 25%")
+      script(src="main.js")

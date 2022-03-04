@@ -1,0 +1,44 @@
+{
+  "name": "@sodaviz/vibes-soda",
+  "version": "1.0.0",
+  "description": "A soda visualization for the VIBES pipeline.",
+  "prepublish": "make build",
+  "main": "dist/main.js",
+  "types": "dist/main.d.ts",
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@sodaviz/soda": "file:../soda",
+    "d3": "5.15.0"
+  },
+  "devDependencies": {
+    "@types/d3": "5.7.2",
+    "@types/resize-observer-browser": "^0.1.6",
+    "prettier": "2.3.2",
+    "typescript": "4.1.3",
+    "webpack": "4.41.6",
+    "webpack-cli": "3.3.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sodaviz/vibes-soda.git"
+  },
+  "author": "Jack Roddy",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/sodaviz/vibes-soda/issues"
+  },
+  "homepage": "https://github.com/sodaviz/vibes-soda#readme",
+  "directories": {
+    "example": "example"
+  },
+  "keywords": [
+    "bioinformatics",
+    "RepeatMasker",
+    "visualization"
+  ]
+}
