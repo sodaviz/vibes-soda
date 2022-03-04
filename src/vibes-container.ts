@@ -287,7 +287,14 @@ export class VibesContainer {
         });
       },
       postResize(): void {
-        this.render(this.renderParams);
+        if (this._renderParams) {
+          this.divHeight = undefined;
+          this.render(this._renderParams);
+        }
+        else {
+          this.divHeight = container.radialBacteriaChart.divHeight;
+          this.updateDivProperties();
+        }
       },
     });
 
