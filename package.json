@@ -12,7 +12,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@sodaviz/soda": "file:../soda",
+    "@sodaviz/soda": "^0.9.1",
     "d3": "5.15.0"
   },
   "devDependencies": {
