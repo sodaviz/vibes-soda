@@ -15,4 +15,5 @@ Once you have NPM installed, you can run the VIBES-SODA example with:
     npm i 
     make build
     cd example
+    npm i
     make serve
