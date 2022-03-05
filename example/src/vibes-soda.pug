@@ -17,13 +17,16 @@ button.collapsible info
     | At the top of the visualization, you will find a chart that represents a linearized version of the selected bacterial genome. 
     | The top row of the linear chart displays annotations of phage integrations to the bacterial genome as identified by VIBES, and the bottom row displays gene annotations (acquired from an externally-sourced GTF file). 
     | The linear chart can be zoomed with ctrl+scroll and panned by clicking and dragging. 
-    | At the top zoom level, the gene annotations are condensed into groups based off of proximity in the chromosome. 
+    | At the top zoom level, the gene annotations are aggregated into groups based off of proximity in the chromosome. 
     | As the zoom level increases, the gene annotations are continuously re-rendered as more horizontal screen real estate enables finer-grained display.
   p 
     | Below the linear chart on the left is a radial representation of the bacterial genome. 
-    | Here, phage integrations are shown on the outer ring and a condensed representation of gene annotations are on the inner ring (this gene annotation representation is a work-in-progress). 
-    | The radial chart can also be zoomed with ctrl+scroll and panned by clicking and dragging. 
-    | As the linear chart is zoomed and panned, a brush is drawn on the radial chart that highlights the region of the bacterial genome that is currently shown in the linear view.
+    | Here, phage integrations are shown on the outer ring and gene annotations are shown on the inner ring. 
+    | The radial chart can also be zoomed with ctrl+scroll and panned by clicking and dragging.
+    | Like in the linear chart, gene annotations are aggregated based on the current zoom level. 
+  p
+    | On the linear bacterial chart, a region is shaded in gray to indicate the region that is currently rendered in the radial chart.
+    | On the radial bacterial chart, a region is similarly shaded to indicate the region that is currently rendered in the linear chart.  
   p 
     | On both the linear and radial charts, a single phage integration is highlighted blue, indicating that it is currently "active". 
     | The active annotation determines the contents of the occurrences plot, which is directly to the right of the radial chart. 
