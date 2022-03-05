@@ -15,7 +15,7 @@ class BacteriaNameItem {
 }
 
 let spinner = new Spinner({
-  color: "cadetblue",
+  color: "cadetblue"
 });
 
 function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
@@ -34,7 +34,7 @@ function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
     onSelect: (item: BacteriaNameItem, input: HTMLInputElement) => {
       // this function is called when the user clicks on an element in the autocomplete list
       input.value = item.label;
-      spinner.spin(document.querySelector<HTMLDivElement>("#charts")!);
+      spinner.spin(document.querySelector<HTMLDivElement>("#vibes-mid")!);
       container.query(item.label).then(() => spinner.stop());
     },
     fetch: (text: string, update: Function) => {

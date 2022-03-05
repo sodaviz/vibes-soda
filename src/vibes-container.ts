@@ -42,6 +42,7 @@ export class VibesContainer {
   radialBacteriaChart: soda.Contrib.RadialChart<VibesBacteriaChartRenderParams>;
   occurrencesChart: soda.Chart<VibesOccurrenceChartRenderParams>;
   occurrencesCache: VibesOccurrenceChartRenderParams[] = [];
+  charts: soda.Chart<any>[] = [];
   tableSelection: d3.Selection<any, any, any, any>;
   activeAnnotation: VibesBacteriaAnnotation | undefined;
   linearChartTimeoutId: number | undefined;
@@ -108,14 +109,14 @@ export class VibesContainer {
         soda.tooltip({
           chart: this,
           annotations: aggregationResults.aggregated,
-          selector: "bacteria-genes-aggregated",
+          selector: "bacteria-genes-aggregated-internal",
           text: (d) => `aggregated group (${d.a.group.length})`,
         });
 
         soda.tooltip({
           chart: this,
           annotations: aggregationResults.individual,
-          selector: "bacteria-genes-individual",
+          selector: "bacteria-genes-individual-internal",
           text: (d) => `${d.a.alias}`,
         });
       },
@@ -132,7 +133,7 @@ export class VibesContainer {
           });
           container.addActiveAnnotationOutline();
         }, 500);
-        
+
         setChartHighlight(container.radialBacteriaChart, this);
       },
     });
@@ -171,14 +172,14 @@ export class VibesContainer {
         soda.tooltip({
           chart: this,
           annotations: aggregationResults.aggregated,
-          selector: "bacteria-genes-aggregated",
+          selector: "bacteria-genes-aggregated-internal",
           text: (d) => `aggregated group (${d.a.group.length})`,
         });
 
         soda.tooltip({
           chart: this,
           annotations: aggregationResults.individual,
-          selector: "bacteria-genes-individual",
+          selector: "bacteria-genes-individual-internal",
           text: (d) => `${d.a.alias}`,
         });
       },
@@ -195,7 +196,7 @@ export class VibesContainer {
           });
           container.addActiveAnnotationOutline();
         }, 500);
-        
+
         setChartHighlight(container.linearBacteriaChart, this);
       },
     });
@@ -296,11 +297,21 @@ export class VibesContainer {
         }
       },
     });
-
+    this.charts = [this.linearBacteriaChart, this.radialBacteriaChart, this.occurrencesChart];
     this.tableSelection = d3.select("div#vibes-bottom").append("div");
   }
 
+  public clear() {
+    this.occurrencesCache = [];
+    this.activeAnnotation = undefined;
+    this.tableSelection.selectAll("*").remove();
+    for (const chart of this.charts) {
+      chart.clear();
+    }
+  }
+
   async query(bacteriaName: string) {
+    this.clear();
     let phageRecords = await fetch(
       `https://sodaviz.org/vibesBacteria/${bacteriaName}/range?start=0&end=0`
     )
@@ -408,7 +419,6 @@ export class VibesContainer {
     };
     this.linearBacteriaChart.render(bacteriaRenderParams);
     this.radialBacteriaChart.render(bacteriaRenderParams);
-
 
     soda.hoverBehavior({
       annotations: params.phageAnnotations,
