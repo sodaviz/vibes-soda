@@ -1,8 +1,8 @@
 import * as autocomplete from "autocompleter";
-import { Spinner } from "spin.js";
+import {Spinner} from "spin.js";
 import * as vs from "@sodaviz/vibes-soda";
 
-let container = new vs.VibesContainer({ selector: "#charts" });
+let container = new vs.VibesContainer({selector: "#charts"});
 
 class BacteriaNameItem {
   label: string;
@@ -13,10 +13,6 @@ class BacteriaNameItem {
     this.group = "Bacteria";
   }
 }
-
-let spinner = new Spinner({
-  color: "cadetblue"
-});
 
 function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
   const bacteria: BacteriaNameItem[] = records.map(
@@ -34,6 +30,11 @@ function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
     onSelect: (item: BacteriaNameItem, input: HTMLInputElement) => {
       // this function is called when the user clicks on an element in the autocomplete list
       input.value = item.label;
+      let spinner = new Spinner({
+        color: "cadetblue",
+        position: "relative",
+        top: `${container.radialBacteriaChart.getContainerHeight()/2}px`
+      });
       spinner.spin(document.querySelector<HTMLDivElement>("#vibes-mid")!);
       container.query(item.label).then(() => spinner.stop());
     },
