@@ -280,7 +280,30 @@ export class VibesContainer {
           strokeColor: container.occurrenceGeneColor,
           fillColor: container.occurrenceGeneColor,
         });
-
+        
+        soda.clickBehavior({
+          chart: this,
+          annotations: params.annotations,
+          click: (s, d) => {
+            let rowSelection = d3.select<HTMLElement, any>(`tr#row-${d.a.id}`);
+            let rowElement = rowSelection
+              .node();
+            if (rowElement == undefined) {
+              throw(`Table row element on ${d.a.id} is null or undefined`);
+            } else {
+              rowElement
+                .scrollIntoView(false);
+              rowSelection
+                .style('background-color', 'yellow');
+              rowSelection
+                .interrupt()
+                .transition()
+                .duration(2000)
+                .style('background-color', null);
+            }
+          }
+        });
+        
         soda.tooltip({
           chart: this,
           annotations: params.annotations,
