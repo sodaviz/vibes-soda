@@ -33,7 +33,7 @@ function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
       let spinner = new Spinner({
         color: "cadetblue",
         position: "relative",
-        top: `${container.radialBacteriaChart.getContainerHeight()/2}px`
+        top: `${container.radialBacteriaChart.calculateContainerHeight()/2}px`
       });
       spinner.spin(document.querySelector<HTMLDivElement>("#vibes-mid")!);
       container.query(item.label).then(() => spinner.stop());
@@ -50,7 +50,7 @@ function populateBacteriaList(records: vs.VibesBacteriaNameRecord[]) {
 }
 
 async function getBacteriaNames(): Promise<vs.VibesBacteriaNameRecord[]> {
-  const response = await fetch("https://sodaviz.org/vibesBacteriaNames/");
+  const response = await fetch("https://sodaviz.org/data/vibesBacteriaNames/");
   const data = await response.text();
   return JSON.parse(data);
 }
