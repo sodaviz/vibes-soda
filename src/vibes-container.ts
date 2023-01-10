@@ -2,11 +2,6 @@ import * as d3 from "d3";
 import * as soda from "@sodaviz/soda";
 
 import {
-  VibesBacteriaAnnotationRecord,
-  VibesBacteriaGeneAnnotationRecord,
-  VibesVirusPlotRecord,
-} from "./vibes-records";
-import {
   VibesBacteriaAnnotation,
   VibesBacteriaGeneAnnotation,
   VibesVirusAnnotation,
@@ -19,6 +14,7 @@ export interface VibesContainerConfig {
 interface VibesContainerRenderParams {
   phageAnnotations: VibesBacteriaAnnotation[];
   geneAnnotations: VibesBacteriaGeneAnnotation[];
+  occurrencesRenderParamsList: VibesOccurrenceChartRenderParams[];
 }
 
 interface VibesBacteriaChartRenderParams extends soda.RenderParams {
@@ -27,7 +23,7 @@ interface VibesBacteriaChartRenderParams extends soda.RenderParams {
   updateDomain?: boolean;
 }
 
-interface VibesOccurrenceChartRenderParams extends soda.RenderParams {
+export interface VibesOccurrenceChartRenderParams extends soda.RenderParams {
   annotations: VibesVirusAnnotation[];
   occurrences: soda.PlotAnnotation;
   name: string;
@@ -48,7 +44,9 @@ export class VibesContainer {
   linearBacteriaChart: soda.Chart<VibesBacteriaChartRenderParams>;
   radialBacteriaChart: soda.RadialChart<VibesBacteriaChartRenderParams>;
   occurrencesChart: soda.Chart<VibesOccurrenceChartRenderParams>;
-  occurrencesCache: VibesOccurrenceChartRenderParams[] = [];
+  // hold a list of the RenderParams for the occurrences chart, 
+  // since it is completely re-rendered based on user input
+  occurrencesRenderParamsList: VibesOccurrenceChartRenderParams[] = [];
   charts: soda.Chart<any>[] = [];
   tableSelection: d3.Selection<any, any, any, any>;
   activeAnnotation: VibesBacteriaAnnotation | undefined;
@@ -363,7 +361,7 @@ export class VibesContainer {
   }
 
   public clear() {
-    this.occurrencesCache = [];
+    this.occurrencesRenderParamsList = [];
     this.activeAnnotation = undefined;
     this.tableSelection.selectAll("*").remove();
     for (const chart of this.charts) {
@@ -371,107 +369,11 @@ export class VibesContainer {
     }
   }
 
-  async query(bacteriaName: string) {
-    this.clear();
-    let phageRecords = await fetch(
-      `https://sodaviz.org/data/vibesBacteria/${bacteriaName}`
-    )
-      .then((response) => response.text())
-      .then((text) => <VibesBacteriaAnnotationRecord[]>JSON.parse(text))
-      .then((records) =>
-        records.sort((a, b) => (a.bacteria_start > b.bacteria_start ? 1 : -1))
-      );
-
-    let geneRecords = await fetch(
-      `https://sodaviz.org/data/vibesBacteriaGenes/${bacteriaName}`
-    )
-      .then((response) => response.text())
-      .then((text) => <VibesBacteriaGeneAnnotationRecord[]>JSON.parse(text));
-
-    let phageAnnotations: VibesBacteriaAnnotation[] = phageRecords.map((r) => {
-      let start, end;
-      if (r.bacteria_end > r.bacteria_start) {
-        start = r.bacteria_start;
-        end = r.bacteria_end;
-      } else {
-        start = r.bacteria_end;
-        end = r.bacteria_start;
-      }
-      return {
-        id: soda.generateId("phage"),
-        start,
-        end,
-        row: 0,
-        virusName: r.virus_name,
-        virusEnd: r.virus_end,
-        virusStart: r.virus_start,
-        evalue: r.evalue,
-        strand: r.strand,
-      };
-    });
-
-    let geneAnnotations: VibesBacteriaGeneAnnotation[] = geneRecords.map(
-      (r) => {
-        return {
-          ...r,
-        };
-      }
-    );
-
-    this.occurrencesCache = [];
-    let phageNames = phageRecords
-      .map((r) => r.virus_name)
-      .filter((value, idx, self) => self.indexOf(value) === idx);
-
-    for (const phageName of phageNames) {
-      const response = await fetch(
-        `https://sodaviz.org/data/vibesProphage/${phageName}/`
-      );
-      const data = await response.text();
-      let record: VibesVirusPlotRecord = JSON.parse(data)[0];
-
-      let occurrences = {
-        id: soda.generateId("occurrences"),
-        start: 0,
-        end: record.occurrences.length,
-        row: 0,
-        values: record.occurrences,
-      };
-
-      let annotations: VibesVirusAnnotation[] = record.annotations.map((r) => {
-        return {
-          id: soda.generateId("virus"),
-          start: r.genomeStart,
-          end: r.genomeEnd,
-          geneStart: r.geneStart,
-          geneEnd: r.geneEnd,
-          geneLength: r.geneLength,
-          genomeStrand: r.genomeStrand,
-          geneStrand: r.geneStrand,
-          name: r.name,
-          evalue: r.evalue,
-        };
-      });
-      annotations.sort((a, b) => (a.start > b.start ? 1 : -1));
-      this.occurrencesCache.push({
-        annotations,
-        occurrences,
-        name: phageName,
-        start: occurrences.start,
-        end: occurrences.end,
-        rowCount: this.occurrenceRows,
-        virusStart: 0,
-        virusEnd: 0,
-      });
-    }
-
-    this.render({
-      phageAnnotations,
-      geneAnnotations,
-    });
-  }
-
   public render(params: VibesContainerRenderParams) {
+    this.clear();
+    this.occurrencesRenderParamsList = params.occurrencesRenderParamsList;
+    
+    // we use the same render params for the linear & radial bacteria charts
     let bacteriaRenderParams = {
       annotations: params.phageAnnotations,
       genes: params.geneAnnotations,
@@ -480,6 +382,7 @@ export class VibesContainer {
     this.linearBacteriaChart.render(bacteriaRenderParams);
     this.radialBacteriaChart.render(bacteriaRenderParams);
 
+    // hover behavior for highlighting phage annotations
     soda.hoverBehavior({
       annotations: params.phageAnnotations,
       mouseover(s): void {
@@ -490,6 +393,7 @@ export class VibesContainer {
       },
     });
 
+    // click behavior for setting the active annotation
     let container = this;
     soda.clickBehavior({
       annotations: params.phageAnnotations,
@@ -498,6 +402,7 @@ export class VibesContainer {
       },
     });
 
+    // we'll just default to setting the first phage annotation as "active"
     this.setActiveAnnotation(params.phageAnnotations[0]);
   }
 
@@ -530,18 +435,18 @@ export class VibesContainer {
     this.addActiveAnnotationOutline();
 
     let idx = 0;
-    for (const [i, occurrence] of this.occurrencesCache.entries()) {
+    for (const [i, occurrence] of this.occurrencesRenderParamsList.entries()) {
       if (annotation.virusName == occurrence.name) {
         idx = i;
         break;
       }
     }
     this.occurrencesChart.render({
-      ...this.occurrencesCache[idx],
+      ...this.occurrencesRenderParamsList[idx],
       virusStart: annotation.virusStart,
       virusEnd: annotation.virusEnd,
     });
-    this.renderTable(this.occurrencesCache[idx]);
+    this.renderTable(this.occurrencesRenderParamsList[idx]);
   }
 
   public renderTable(params: VibesOccurrenceChartRenderParams) {
