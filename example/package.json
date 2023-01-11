@@ -10,7 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "@sodaviz/vibes-soda": "file:..",
-    "autocompleter": "^6.1.2",
     "pug-cli": "^1.0.0-alpha6",
     "spin.js": "^4.1.1",
     "esbuild": "^0.14.24",
