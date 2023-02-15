@@ -2,54 +2,59 @@ import * as d3 from "d3";
 import * as soda from "@sodaviz/soda";
 
 import {
-  VibesBacteriaAnnotation,
-  VibesBacteriaGeneAnnotation,
-  VibesVirusAnnotation,
+  IntegrationAnnotation,
+  BacteriaGeneAnnotation,
+  VirusGeneAnnotation,
 } from "./vibes-annotations";
 
 export interface VibesContainerConfig {
   selector: string;
+  integrationAnnotations: IntegrationAnnotation[][];
+  bacteriaGeneAnnotations: BacteriaGeneAnnotation[][];
+  virusGeneAnnotations: VirusGeneAnnotation[][];
+  bacteriaLengths: number[];
+  bacteriaNames: string[];
+  phageNames: string[];
+  phageLengths: number[];
 }
 
 interface VibesContainerRenderParams {
-  phageAnnotations: VibesBacteriaAnnotation[];
-  geneAnnotations: VibesBacteriaGeneAnnotation[];
-  occurrencesRenderParamsList: VibesOccurrenceChartRenderParams[];
+  bacteriaName: string;
 }
 
 interface VibesBacteriaChartRenderParams extends soda.RenderParams {
-  annotations: VibesBacteriaAnnotation[];
-  genes: VibesBacteriaGeneAnnotation[];
+  integrations: IntegrationAnnotation[];
+  genes: BacteriaGeneAnnotation[];
   updateDomain?: boolean;
 }
 
 export interface VibesOccurrenceChartRenderParams extends soda.RenderParams {
-  annotations: VibesVirusAnnotation[];
+  annotations: VirusGeneAnnotation[];
   occurrences: soda.PlotAnnotation;
   name: string;
   virusStart: number;
   virusEnd: number;
 }
 
-let colors = [
-  "#ad5252",
-  "#496279",
-  "#afc7d9",
-  "#e7a865",
-  "#343434",
-  "#65bac6"
-];
+let colors = ["#ad5252", "#496279", "#afc7d9", "#e7a865", "#343434", "#65bac6"];
 
 export class VibesContainer {
+  integrationAnnotations: IntegrationAnnotation[][];
+  bacteriaGeneAnnotations: BacteriaGeneAnnotation[][];
+  virusGeneAnnotations: VirusGeneAnnotation[][];
+  bacteriaLengths: number[];
+  bacteriaNames: string[];
+  phageNames: string[];
+  phageLengths: number[];
   linearBacteriaChart: soda.Chart<VibesBacteriaChartRenderParams>;
   radialBacteriaChart: soda.RadialChart<VibesBacteriaChartRenderParams>;
   occurrencesChart: soda.Chart<VibesOccurrenceChartRenderParams>;
-  // hold a list of the RenderParams for the occurrences chart, 
+  // hold a list of the RenderParams for the occurrences chart,
   // since it is completely re-rendered based on user input
   occurrencesRenderParamsList: VibesOccurrenceChartRenderParams[] = [];
   charts: soda.Chart<any>[] = [];
   tableSelection: d3.Selection<any, any, any, any>;
-  activeAnnotation: VibesBacteriaAnnotation | undefined;
+  activeAnnotation: IntegrationAnnotation | undefined;
   linearChartTimeoutId: number | undefined;
   radialChartTimeoutId: number | undefined;
   occurrenceRows = 30;
@@ -63,6 +68,14 @@ export class VibesContainer {
   geneAlignmentBottomColor = colors[1];
 
   public constructor(config: VibesContainerConfig) {
+    this.integrationAnnotations = config.integrationAnnotations;
+    this.bacteriaGeneAnnotations = config.bacteriaGeneAnnotations;
+    this.virusGeneAnnotations = config.virusGeneAnnotations;
+    this.bacteriaLengths = config.bacteriaLengths;
+    this.bacteriaNames = config.bacteriaNames;
+    this.phageNames = config.phageNames;
+    this.phageLengths = config.phageLengths;
+
     let outerDivSelection = d3.select(config.selector);
 
     outerDivSelection.append("div").attr("id", "vibes-top");
@@ -89,8 +102,7 @@ export class VibesContainer {
       leftPadSize: 0,
       rightPadSize: 0,
       selector: "#vibes-top",
-      updateLayout() {
-      },
+      updateLayout() {},
       updateDomain(params) {
         if (params.updateDomain == true || params.updateDomain == undefined) {
           this.defaultUpdateDomain(params);
@@ -100,7 +112,7 @@ export class VibesContainer {
         this.addAxis();
         soda.rectangle({
           chart: this,
-          annotations: params.annotations,
+          annotations: params.integrations,
           selector: "linear-bacteria-phages",
           fillColor: container.phageColor,
           strokeColor: container.outlineColor,
@@ -136,7 +148,7 @@ export class VibesContainer {
           chart: this,
           annotations: aggregationResults.individual,
           selector: "bacteria-genes-individual",
-          text: (d) => `${d.a.alias}`,
+          text: (d) => `${d.a.name}`,
         });
       },
       postRender(): void {
@@ -162,8 +174,7 @@ export class VibesContainer {
       selector: "#vibes-mid",
       padSize: 50,
       divWidth: "50%",
-      updateLayout() {
-      },
+      updateLayout() {},
       updateDomain(params) {
         if (params.updateDomain == true || params.updateDomain == undefined) {
           this.defaultUpdateDomain(params);
@@ -174,7 +185,7 @@ export class VibesContainer {
         let thisCasted = <soda.RadialChart<VibesBacteriaChartRenderParams>>this;
         soda.radialRectangle({
           chart: thisCasted,
-          annotations: params.annotations,
+          annotations: params.integrations,
           selector: "radial-bacteria-phages",
           fillColor: container.phageColor,
           strokeColor: container.outlineColor,
@@ -210,7 +221,7 @@ export class VibesContainer {
           chart: this,
           annotations: aggregationResults.individual,
           selector: "bacteria-genes-individual",
-          text: (d) => `${d.a.alias}`,
+          text: (d) => `${d.a.name}`,
         });
       },
       postRender(): void {
@@ -236,8 +247,7 @@ export class VibesContainer {
       selector: "#vibes-mid",
       divWidth: "50%",
       upperPadSize: 5,
-      updateLayout() {
-      },
+      updateLayout() {},
       updateDimensions(params): void {
         let height =
           container.radialBacteriaChart.calculatePadHeight() -
@@ -250,7 +260,7 @@ export class VibesContainer {
         let layout = soda.intervalGraphLayout(params.annotations, 100);
         let geneRows = layout.rowCount + 1;
         let plotRows = container.occurrenceRows - geneRows;
-        
+
         for (const id of layout.rowMap.keys()) {
           layout.rowMap.set(id, layout.rowMap.get(id)! + plotRows);
         }
@@ -271,7 +281,7 @@ export class VibesContainer {
           target: this.overflowViewportSelection,
         });
 
-        let maxValue = Math.max(...params.occurrences.values)
+        let maxValue = Math.max(...params.occurrences.values);
         soda.verticalAxis({
           chart: this,
           annotations: [params.occurrences],
@@ -287,7 +297,7 @@ export class VibesContainer {
           chart: this,
           annotations: [params.occurrences],
           selector: "occurrence-plot",
-          domain: [0, maxValue],
+          domain: [maxValue, 0],
           strokeColor: container.outlineColor,
           rowSpan: plotRows - horizontalAxisRowSpan,
         });
@@ -295,14 +305,14 @@ export class VibesContainer {
         let occurrenceSlice = soda.slicePlotAnnotations({
           annotations: [params.occurrences],
           start: params.virusStart,
-          end: params.virusEnd
+          end: params.virusEnd,
         })!.annotations[0];
 
         occurrenceSlice.id = "occurrence-slice";
         soda.area({
           chart: this,
           annotations: [occurrenceSlice!],
-          domain: [0, maxValue],
+          domain: [maxValue, 0],
           strokeColor: container.occurrenceFillColor,
           selector: "occurrence-plot-slice",
           rowSpan: plotRows - horizontalAxisRowSpan,
@@ -323,22 +333,19 @@ export class VibesContainer {
           annotations: params.annotations,
           click: (s, d) => {
             let rowSelection = d3.select<HTMLElement, any>(`tr#row-${d.a.id}`);
-            let rowElement = rowSelection
-              .node();
+            let rowElement = rowSelection.node();
             if (rowElement == undefined) {
-              throw(`Table row element on ${d.a.id} is null or undefined`);
+              throw `Table row element on ${d.a.id} is null or undefined`;
             } else {
-              rowElement
-                .scrollIntoView(false);
-              rowSelection
-                .style('background-color', 'yellow');
+              rowElement.scrollIntoView(false);
+              rowSelection.style("background-color", "yellow");
               rowSelection
                 .interrupt()
                 .transition()
                 .duration(2000)
-                .style('background-color', null);
+                .style("background-color", null);
             }
-          }
+          },
         });
 
         soda.tooltip({
@@ -356,7 +363,11 @@ export class VibesContainer {
         }
       },
     });
-    this.charts = [this.linearBacteriaChart, this.radialBacteriaChart, this.occurrencesChart];
+    this.charts = [
+      this.linearBacteriaChart,
+      this.radialBacteriaChart,
+      this.occurrencesChart,
+    ];
     this.tableSelection = d3.select("div#vibes-bottom").append("div");
   }
 
@@ -371,12 +382,18 @@ export class VibesContainer {
 
   public render(params: VibesContainerRenderParams) {
     this.clear();
-    this.occurrencesRenderParamsList = params.occurrencesRenderParamsList;
-    
+    // this.occurrencesRenderParamsList = params.occurrencesRenderParamsList;
+
+    let bacteriaIdx = this.bacteriaNames.indexOf(params.bacteriaName);
+    let integrations = this.integrationAnnotations[bacteriaIdx];
+    let genes = this.bacteriaGeneAnnotations[bacteriaIdx];
+
     // we use the same render params for the linear & radial bacteria charts
     let bacteriaRenderParams = {
-      annotations: params.phageAnnotations,
-      genes: params.geneAnnotations,
+      integrations,
+      genes,
+      start: 0,
+      end: this.bacteriaLengths[bacteriaIdx],
       rowCount: 2,
     };
     this.linearBacteriaChart.render(bacteriaRenderParams);
@@ -384,7 +401,7 @@ export class VibesContainer {
 
     // hover behavior for highlighting phage annotations
     soda.hoverBehavior({
-      annotations: params.phageAnnotations,
+      annotations: integrations,
       mouseover(s): void {
         s.attr("fill", "maroon");
       },
@@ -396,20 +413,20 @@ export class VibesContainer {
     // click behavior for setting the active annotation
     let container = this;
     soda.clickBehavior({
-      annotations: params.phageAnnotations,
+      annotations: integrations,
       click(s, d): void {
         container.setActiveAnnotation(d.a);
       },
     });
 
     // we'll just default to setting the first phage annotation as "active"
-    this.setActiveAnnotation(params.phageAnnotations[0]);
+    this.setActiveAnnotation(this.integrationAnnotations[bacteriaIdx][0]);
   }
 
   public removeActiveAnnotationOutline() {
     if (this.activeAnnotation != undefined) {
       let glyphs = <d3.Selection<any, any, any, any>[]>(
-        soda.queryGlyphMap({annotations: [this.activeAnnotation]})
+        soda.queryGlyphMap({ annotations: [this.activeAnnotation] })
       );
       for (const glyph of glyphs) {
         glyph.style("stroke", this.outlineColor);
@@ -420,7 +437,7 @@ export class VibesContainer {
   public addActiveAnnotationOutline() {
     if (this.activeAnnotation != undefined) {
       let glyphs = <d3.Selection<any, any, any, any>[]>(
-        soda.queryGlyphMap({annotations: [this.activeAnnotation]})
+        soda.queryGlyphMap({ annotations: [this.activeAnnotation] })
       );
 
       for (const glyph of glyphs) {
@@ -429,24 +446,51 @@ export class VibesContainer {
     }
   }
 
-  public setActiveAnnotation(annotation: VibesBacteriaAnnotation) {
+  public setActiveAnnotation(annotation: IntegrationAnnotation) {
     this.removeActiveAnnotationOutline();
     this.activeAnnotation = annotation;
     this.addActiveAnnotationOutline();
 
-    let idx = 0;
-    for (const [i, occurrence] of this.occurrencesRenderParamsList.entries()) {
-      if (annotation.virusName == occurrence.name) {
-        idx = i;
-        break;
+    let phageName = annotation.phageName;
+    let phageIdx = this.phageNames.indexOf(phageName);
+    let phageLength = this.phageLengths[phageIdx];
+
+    let integrations = this.integrationAnnotations.reduce<
+      IntegrationAnnotation[]
+    >((acc, curr) => {
+      let matches = curr.filter(
+        (a: IntegrationAnnotation) => a.phageName == phageName
+      );
+      return acc.concat(matches);
+    }, []);
+
+    let occurrences = new Array(phageLength).fill(0);
+    for (const ann of integrations) {
+      for (let i = ann.phageStart; i <= ann.phageEnd; i++) {
+        occurrences[i]++;
       }
     }
-    this.occurrencesChart.render({
-      ...this.occurrencesRenderParamsList[idx],
-      virusStart: annotation.virusStart,
-      virusEnd: annotation.virusEnd,
-    });
-    this.renderTable(this.occurrencesRenderParamsList[idx]);
+    console.log(annotation);
+    console.log(integrations);
+    console.log(occurrences);
+    let occurrenceAnnotation = {
+      id: "occurrence-plot",
+      start: 0,
+      end: phageLength,
+      values: occurrences,
+    };
+
+    let params = {
+      annotations: this.virusGeneAnnotations[phageIdx],
+      name: annotation.phageName,
+      occurrences: occurrenceAnnotation,
+      virusStart: annotation.phageStart,
+      virusEnd: annotation.phageEnd,
+      rowCount: this.occurrenceRows,
+    };
+
+    this.occurrencesChart.render(params);
+    this.renderTable(params);
   }
 
   public renderTable(params: VibesOccurrenceChartRenderParams) {
@@ -512,9 +556,9 @@ export class VibesContainer {
       row.append("td").html(`${ann.start}`);
       row.append("td").html(`${ann.start + ann.end}`);
       row.append("td").html(`${ann.evalue.toExponential(2)}`);
-      row.append("td").html(`${ann.geneStart}`);
-      row.append("td").html(`${ann.geneEnd}`);
-      row.append("td").html(`${ann.geneLength}`);
+      row.append("td").html(`${ann.modelStart}`);
+      row.append("td").html(`${ann.modelEnd}`);
+      row.append("td").html(`${ann.modelLength}`);
 
       let aliRow = row
         .append("td")
@@ -529,8 +573,8 @@ export class VibesContainer {
         .attr("y", 5)
         .attr("fill", this.geneAlignmentTopColor);
 
-      let aliWidth = ((ann.geneEnd - ann.geneStart) / ann.geneLength) * 100;
-      let aliX = (ann.geneStart / ann.geneLength) * 100;
+      let aliWidth = ((ann.modelEnd - ann.modelStart) / ann.modelLength) * 100;
+      let aliX = (ann.modelStart / ann.modelLength) * 100;
 
       aliRow
         .append("rect")
@@ -551,10 +595,10 @@ export class VibesContainer {
 
 function aggregateBacteriaGenes(
   chart: soda.Chart<any>,
-  annotations: VibesBacteriaGeneAnnotation[]
+  annotations: BacteriaGeneAnnotation[]
 ): {
-  individual: VibesBacteriaGeneAnnotation[];
-  aggregated: soda.AnnotationGroup<VibesBacteriaGeneAnnotation>[];
+  individual: BacteriaGeneAnnotation[];
+  aggregated: soda.AnnotationGroup<BacteriaGeneAnnotation>[];
 } {
   let domain = chart.xScale.domain();
   annotations = annotations.filter(
@@ -563,7 +607,7 @@ function aggregateBacteriaGenes(
 
   let tolerance = 1000 / chart.transform.k;
   if (tolerance < 10) {
-    return {individual: annotations, aggregated: []};
+    return { individual: annotations, aggregated: [] };
   }
   let aggregated = soda.aggregateIntransitive({
     annotations,
@@ -577,10 +621,13 @@ function aggregateBacteriaGenes(
 
   aggregated = aggregated.filter((a) => a.annotations.length > 1);
 
-  return {individual, aggregated};
+  return { individual, aggregated };
 }
 
-function setChartHighlight(highlightedChart: soda.Chart<any>, representedChart: soda.Chart<any>) {
+function setChartHighlight(
+  highlightedChart: soda.Chart<any>,
+  representedChart: soda.Chart<any>
+) {
   let domain = representedChart.xScale.domain();
   highlightedChart.highlight({
     start: domain[0],

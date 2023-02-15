@@ -1,24 +1,23 @@
 import { Annotation } from "@sodaviz/soda";
 
-export interface VibesBacteriaAnnotation extends Annotation {
-  virusName: string;
-  virusStart: number;
-  virusEnd: number;
+export interface IntegrationAnnotation extends Annotation {
+  phageName: string;
+  phageStart: number;
+  phageEnd: number;
   strand: string;
   evalue: number;
 }
 
-export interface VibesBacteriaGeneAnnotation extends Annotation {
-  alias: string;
+export interface BacteriaGeneAnnotation extends Annotation {
   strand: string;
+  name: string;
 }
 
-export interface VibesVirusAnnotation extends Annotation {
+export interface VirusGeneAnnotation extends Annotation {
   name: string;
-  geneStart: number;
-  geneEnd: number;
-  geneLength: number;
-  genomeStrand: string;
-  geneStrand: string;
+  modelStart: number;
+  modelEnd: number;
+  modelLength: number;
+  strand: string;
   evalue: number;
 }

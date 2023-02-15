@@ -17,7 +17,7 @@ export class VibesDropdown {
   innerExpandableSelection: d3.Selection<any, any, any, any>;
   searchInputSelection: d3.Selection<any, any, any, any>;
   entrySelection: d3.Selection<any, any, any, any>;
-  names: string[] = [];
+  entries: string[] = [];
   matchedNames: string[] = [];
   matchCount: number = Infinity;
 
@@ -148,9 +148,9 @@ export class VibesDropdown {
     let matchedNames = [];
 
     if (text == "") {
-      matchedNames = this.names;
+      matchedNames = this.entries;
     } else {
-      for (const name of this.names) {
+      for (const name of this.entries) {
         if (name.includes(text)) {
           matchedNames.push(name);
         }
@@ -167,7 +167,8 @@ export class VibesDropdown {
       .data(matchedNames)
       .enter()
       .append("span")
-      .attr("class", (d) => d)
+      // TODO: rethink this
+      .attr("class", (d) => `e${this.entries.indexOf(d)}`)
       .style("margin-top", "2px")
       .style("margin-left", "2px")
       .style("-webkit-user-select", "none")
@@ -205,7 +206,9 @@ export class VibesDropdown {
 
   public select(text: string, close = true) {
     this.entrySelection.selectAll("span").style("font-weight", "normal");
-    this.entrySelection.selectAll(`.${text}`).style("font-weight", "bold");
+    this.entrySelection
+      .selectAll(`.e${this.entries.indexOf(text)}`)
+      .style("font-weight", "bold");
     this.selectedText = text;
     this.labelSelection.text(text);
     this.selectCallback(text);
@@ -215,8 +218,8 @@ export class VibesDropdown {
   }
 
   public populate(names: string[]) {
-    this.names = names;
-    this.select(this.names[0], true);
+    this.entries = names;
+    this.select(this.entries[0], true);
     this.search("");
   }
 }
