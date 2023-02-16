@@ -41,9 +41,15 @@ button.collapsible info
 .info 
   p 
     b To use the visualization, input the name of a bacterial genome in the search bar (hint: start typing "pseudomonas" and select the desired genome from the dropdown box).
+    
 
 #viz(style="margin-left: 25%; margin-right: 25%")
-  #dropdown(style="height: 30px; margin-bottom: 15px")
+  .field
+    input(type="text", autocomplete="off", required)#bacteria-selection.input-text
+    span.floating-label Bacteria    
   #charts(style="width: 100%")
-    
+    #vibes-top
+    #vibes-mid
+    #vibes-bottom
+
 script(src="main.js")

@@ -3,8 +3,8 @@
     "outDir": "./js/",
     "strict": true,
     "noImplicitAny": true,
-    "module": "commonJs",
     "sourceMap": true,
+    "module": "CommonJS",
     "target": "es6"
   },
   "compileOnSave": true

@@ -1,6 +1,7 @@
 .PHONY: build
 build:
 	mkdir -p build/
+	cp src/styles.css build/
 	npx tsc --build tsconfig.json
 	npx esbuild js/main.js --sourcemap --bundle --outfile=build/main.js
 	npx pug-cli -P src/index.pug -o build/

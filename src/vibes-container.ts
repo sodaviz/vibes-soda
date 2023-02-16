@@ -470,9 +470,7 @@ export class VibesContainer {
         occurrences[i]++;
       }
     }
-    console.log(annotation);
-    console.log(integrations);
-    console.log(occurrences);
+
     let occurrenceAnnotation = {
       id: "occurrence-plot",
       start: 0,

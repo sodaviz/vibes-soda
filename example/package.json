@@ -4,15 +4,28 @@
   "description": "An example usage of vibes-soda",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "make",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "npm-watch"
+  },
+  "watch": {
+    "build": {
+      "patterns": [
+        "src"
+      ],
+      "extensions": "ts, css, pug"
+    }
   },
   "author": "Jack Roddy",
   "license": "ISC",
   "dependencies": {
-    "@sodaviz/vibes-soda": "file:..",
-    "pug-cli": "^1.0.0-alpha6",
-    "spin.js": "^4.1.1",
+    "@sodaviz/soda": "^0.13.1",
+    "@types/d3": "^5.7.2",
+    "d3": "5.15.0",
+    "autocompleter": "^6.1.2",
     "esbuild": "^0.14.24",
+    "npm-watch": "^0.11.0",
+    "pug-cli": "^1.0.0-alpha6",
     "source-map-loader": "^1.0.0",
     "typescript": "^3.9.7"
   }
