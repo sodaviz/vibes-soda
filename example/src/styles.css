@@ -309,3 +309,12 @@ input[type="file"]#file-input {
 #vibes-mid {
     display: flex
 }
+
+#vibes-occurrence-select {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+    user-select: none;
+}

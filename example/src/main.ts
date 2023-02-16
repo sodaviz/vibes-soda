@@ -27,6 +27,7 @@ let linearChartTimeoutId: number | undefined;
 let radialChartTimeoutId: number | undefined;
 
 let activeAnnotation: IntegrationAnnotation | undefined;
+let occurrenceBacteriaInclusionMap: Map<string, boolean> = new Map();
 
 interface IntegrationAnnotation extends soda.Annotation {
   phageName: string;
@@ -187,9 +188,13 @@ let linearBacteriaChart = new soda.Chart<BacteriaRenderParams>({
 
 let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
   ...chartConfig,
-  selector: "#vibes-mid",
+  selector: "#vibes-radial",
   padSize: 50,
-  divWidth: "50%",
+  // divWidth: "50%",
+  axisConfig: {
+    tickSizeOuter: 10,
+    tickPadding: 15,
+  },
   updateLayout() {},
   updateDomain(params) {
     if (params.updateDomain == true || params.updateDomain == undefined) {
@@ -260,8 +265,8 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
 
 let occurrencesChart = new soda.Chart<VirusRenderParams>({
   ...chartConfig,
-  selector: "#vibes-mid",
-  divWidth: "50%",
+  selector: "#vibes-occurrence",
+  divWidth: "100%",
   upperPadSize: 5,
   updateLayout() {},
   updateDimensions(params): void {
@@ -408,16 +413,55 @@ function setActiveAnnotation(annotation: IntegrationAnnotation) {
   activeAnnotation = annotation;
   addActiveAnnotationOutline();
 
-  let phageName = annotation.phageName;
+  let phageName = activeAnnotation.phageName;
+
+  // find the bacteria that have at least one integration of the selected phage
+  let bacteriaNameSubset = bacteriaNames.filter((name) => {
+    let bacteriaIdx = bacteriaNames.indexOf(name);
+    let annotations = integrationAnnotations[bacteriaIdx];
+    for (const ann of annotations) {
+      if (ann.phageName == phageName) {
+        return true;
+      }
+    }
+    return false;
+  });
+
+  occurrenceBacteriaInclusionMap = new Map();
+  for (const bacteriaName of bacteriaNameSubset) {
+    occurrenceBacteriaInclusionMap.set(bacteriaName, true);
+  }
+
+  renderOccurrenceBacteriaSelection(bacteriaNameSubset);
+  renderOccurrence();
+}
+
+function renderOccurrence() {
+  if (activeAnnotation == undefined) {
+    console.error(
+      "activeAnnotation is undefined in call to renderOccurrence()"
+    );
+    return;
+  }
+
+  let phageName = activeAnnotation.phageName;
   let phageIdx = phageNames.indexOf(phageName);
   let phageLength = phageLengths[phageIdx];
 
+  // find the annotations for each integration of the selected phage
+  //   - we search across integration annotations of each bacterial genome
+  //   - we exclude bacterial genomes that are not in the inclusion map
   let integrations = integrationAnnotations.reduce<IntegrationAnnotation[]>(
-    (acc, curr) => {
-      let matches = curr.filter(
-        (a: IntegrationAnnotation) => a.phageName == phageName
-      );
-      return acc.concat(matches);
+    (accumulatedIntegrations, currentIntegrations, bacteriaIdx) => {
+      let bacteriaName = bacteriaNames[bacteriaIdx];
+      if (occurrenceBacteriaInclusionMap.get(bacteriaName) == true) {
+        let matches = currentIntegrations.filter(
+          (a: IntegrationAnnotation) => a.phageName == phageName
+        );
+        return accumulatedIntegrations.concat(matches);
+      } else {
+        return accumulatedIntegrations;
+      }
     },
     []
   );
@@ -437,11 +481,13 @@ function setActiveAnnotation(annotation: IntegrationAnnotation) {
   };
 
   let params = {
+    start: 0,
+    end: phageLength,
     occurrences: occurrenceAnnotation,
     genes: virusGeneAnnotations[phageIdx],
-    name: annotation.phageName,
-    virusStart: annotation.phageStart,
-    virusEnd: annotation.phageEnd,
+    name: activeAnnotation.phageName,
+    virusStart: activeAnnotation.phageStart,
+    virusEnd: activeAnnotation.phageEnd,
     rowCount: occurrenceRows,
   };
 
@@ -450,7 +496,8 @@ function setActiveAnnotation(annotation: IntegrationAnnotation) {
 }
 
 function renderTable(params: VirusRenderParams) {
-  let tableSelection = d3.select("div#vibes-bottom").selectAll("*").remove();
+  let tableSelection = d3.select("div#vibes-bottom");
+  tableSelection.selectAll("*").remove();
 
   tableSelection
     .append("h3")
@@ -546,6 +593,49 @@ function renderTable(params: VirusRenderParams) {
     .style("border", "1px solid")
     .style("border-color", "#cccccc")
     .style("padding", "1px 0.5em");
+}
+
+function renderOccurrenceBacteriaSelection(names: string[]) {
+  let selection = d3.select("#vibes-occurrence-select");
+
+  // selection.style(
+  //   "height",
+  //   () => `${Math.min(occurrencesChart.viewportHeightPx, 300)}px`
+  // );
+
+  // selection
+  //   .append("div")
+  //   .style("margin-top", "5px")
+  //   .html("select all")
+  //   .on("mousedown", () => console.log("hello"));
+  //
+  // selection
+  //   .append("div")
+  //   .style("margin-top", "5px")
+  //   .html("select none")
+  //   .on("mousedown", () => console.log("hello"));
+
+  selection
+    .selectAll("div.selection")
+    .data(names)
+    .enter()
+    .append("div")
+    .attr("class", "selection")
+    .style("margin-top", "5px")
+    .html((d) => d)
+    .style("background-color", (d) =>
+      occurrenceBacteriaInclusionMap.get(d) == true ? "gainsboro" : "white"
+    )
+    .on("mousedown", (d, i, nodes) => {
+      if (occurrenceBacteriaInclusionMap.get(d) == true) {
+        occurrenceBacteriaInclusionMap.set(d, false);
+        d3.select(nodes[i]).style("background-color", "white");
+      } else {
+        occurrenceBacteriaInclusionMap.set(d, true);
+        d3.select(nodes[i]).style("background-color", "gainsboro");
+      }
+      renderOccurrence();
+    });
 }
 
 function aggregateBacteriaGenes(
