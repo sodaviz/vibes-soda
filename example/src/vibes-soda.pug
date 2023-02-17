@@ -44,9 +44,11 @@ button.collapsible info
     
 
 #viz(style="margin-left: 15%; margin-right: 15%")
-  .field
-    input(type="text", autocomplete="off", required)#bacteria-selection.input-text
-    span.floating-label Bacteria    
+  div.flex.center
+    .field
+      input(type="text", autocomplete="off", required)#bacteria-selection.input-text
+      span.floating-label Bacteria
+    button.button#clear(style="height: 32px") clear
   #charts(style="width: 100%")
     #vibes-top
     #vibes-mid

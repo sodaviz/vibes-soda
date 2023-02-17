@@ -16,7 +16,8 @@ let occurrenceRows = 30;
 let colors = ["#ad5252", "#496279", "#afc7d9", "#e7a865", "#343434", "#65bac6"];
 let outlineColor = colors[4];
 let virusGeneColor = colors[0];
-let occurrenceFillColor = colors[5];
+let occurrenceSelectedColor = colors[5];
+let occurrenceRelatedColor = colors[3];
 let bacteriaGeneColor = colors[1];
 let bacteriaGeneGroupColor = colors[2];
 let phageColor = colors[3];
@@ -26,7 +27,8 @@ let geneAlignmentBottomColor = colors[1];
 let linearChartTimeoutId: number | undefined;
 let radialChartTimeoutId: number | undefined;
 
-let activeAnnotation: IntegrationAnnotation | undefined;
+let selectedBacteria: string | undefined;
+let selectedIntegration: IntegrationAnnotation | undefined;
 let occurrenceBacteriaInclusionMap: Map<string, boolean> = new Map();
 
 interface IntegrationAnnotation extends soda.Annotation {
@@ -59,10 +61,10 @@ interface BacteriaRenderParams extends soda.RenderParams {
 
 interface VirusRenderParams extends soda.RenderParams {
   occurrences: soda.PlotAnnotation;
+  selected: soda.PlotAnnotation;
+  related: soda.Annotation[];
   genes: VirusGeneAnnotation[];
   name: string;
-  virusStart: number;
-  virusEnd: number;
 }
 
 interface BacteriaNameItem {
@@ -79,17 +81,24 @@ function populateBacteriaList() {
     document.getElementById("bacteria-selection")
   );
 
+  let clearButton = <HTMLButtonElement>document.getElementById("clear");
+
+  clearButton.addEventListener("click", () => (inputForm.value = ""));
+
   //@ts-ignore
   autocomplete<BacteriaNameItem>({
     input: inputForm,
     emptyMsg: "No items found",
-    minLength: 1,
+    minLength: 0,
     showOnFocus: true,
+    disableAutoSelect: true,
     onSelect: (item: BacteriaNameItem, input: HTMLInputElement) => {
       // this function is called when the user clicks
       // on an element in the autocomplete list
       input.value = item.label;
-      render(item.label);
+      selectedBacteria = item.label;
+      input.blur();
+      render();
     },
     fetch: (text: string, update: Function) => {
       // this function is called everytime there is a change
@@ -179,7 +188,7 @@ let linearBacteriaChart = new soda.Chart<BacteriaRenderParams>({
         ...this.renderParams,
         updateDomain: false,
       });
-      addActiveAnnotationOutline();
+      addSelectedIntegrationOutline();
     }, 500);
 
     setChartHighlight(radialBacteriaChart, this);
@@ -190,7 +199,6 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
   ...chartConfig,
   selector: "#vibes-radial",
   padSize: 50,
-  // divWidth: "50%",
   axisConfig: {
     tickSizeOuter: 10,
     tickPadding: 15,
@@ -204,6 +212,7 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
   draw(params) {
     this.addAxis();
     let thisCasted = <soda.RadialChart<BacteriaRenderParams>>this;
+    thisCasted.addTrackOutline();
     soda.radialRectangle({
       chart: thisCasted,
       annotations: params.integrations,
@@ -256,7 +265,7 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
         ...this.renderParams,
         updateDomain: false,
       });
-      addActiveAnnotationOutline();
+      addSelectedIntegrationOutline();
     }, 500);
 
     setChartHighlight(linearBacteriaChart, this);
@@ -266,7 +275,6 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
 let occurrencesChart = new soda.Chart<VirusRenderParams>({
   ...chartConfig,
   selector: "#vibes-occurrence",
-  divWidth: "100%",
   upperPadSize: 5,
   updateLayout() {},
   updateDimensions(params): void {
@@ -278,16 +286,27 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
     this.defaultUpdateDimensions(params);
   },
   draw(params): void {
-    let layout = soda.intervalGraphLayout(params.genes, 100);
-    let geneRows = layout.rowCount + 1;
+    let geneLayout = soda.intervalGraphLayout(params.genes, 100);
+    let relatedLayout = soda.intervalGraphLayout(params.related, 10);
+
+    let geneRows = geneLayout.rowCount + 1;
+    let relatedRows = relatedLayout.rowCount + 1;
     let plotRows = occurrenceRows - geneRows;
 
-    for (const id of layout.rowMap.keys()) {
-      layout.rowMap.set(id, layout.rowMap.get(id)! + plotRows);
+    for (const id of geneLayout.rowMap.keys()) {
+      geneLayout.rowMap.set(id, geneLayout.rowMap.get(id)! + plotRows);
     }
-    this.layout = layout;
-    let horizontalAxisYOffset = 3;
+
+    for (const id of relatedLayout.rowMap.keys()) {
+      relatedLayout.rowMap.set(
+        id,
+        relatedLayout.rowMap.get(id)! + plotRows - relatedRows - 2
+      );
+    }
+
+    let horizontalAxisYOffset = -2;
     let horizontalAxisRowSpan = 2;
+
     soda.horizontalAxis({
       chart: this,
       selector: "occurrence-horizontal-axis",
@@ -320,25 +339,29 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
       selector: "occurrence-plot",
       domain: [maxValue, 0],
       strokeColor: outlineColor,
+      strokeWidth: 1.5,
       rowSpan: plotRows - horizontalAxisRowSpan,
     });
 
-    let occurrenceSlice = soda.slicePlotAnnotations({
-      annotations: [params.occurrences],
-      start: params.virusStart,
-      end: params.virusEnd,
-    })!.annotations[0];
-
-    occurrenceSlice.id = "occurrence-slice";
     soda.area({
       chart: this,
-      annotations: [occurrenceSlice!],
+      annotations: [params.selected],
       domain: [maxValue, 0],
-      strokeColor: occurrenceFillColor,
-      selector: "occurrence-plot-slice",
+      strokeColor: occurrenceSelectedColor,
+      selector: "occurrence-plot-selected",
       rowSpan: plotRows - horizontalAxisRowSpan,
-      fillColor: occurrenceFillColor,
+      fillColor: occurrenceSelectedColor,
       fillOpacity: 0.25,
+    });
+
+    soda.rectangle({
+      chart: this,
+      annotations: params.related,
+      selector: "occurrence-plot-related",
+      fillColor: occurrenceRelatedColor,
+      fillOpacity: 0.75,
+      row: (d) => relatedLayout.row(d),
+      height: this.rowHeight / 2,
     });
 
     soda.rectangle({
@@ -347,6 +370,8 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
       selector: "virus-genes",
       strokeColor: virusGeneColor,
       fillColor: virusGeneColor,
+      row: (d) => geneLayout.row(d),
+      height: this.rowHeight / 2,
     });
 
     soda.clickBehavior({
@@ -385,10 +410,10 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
   },
 });
 
-function removeActiveAnnotationOutline() {
-  if (activeAnnotation != undefined) {
+function removeSelectedIntegrationOutline() {
+  if (selectedIntegration != undefined) {
     let glyphs = <d3.Selection<any, any, any, any>[]>(
-      soda.queryGlyphMap({ annotations: [activeAnnotation] })
+      soda.queryGlyphMap({ annotations: [selectedIntegration] })
     );
     for (const glyph of glyphs) {
       glyph.style("stroke", outlineColor);
@@ -396,24 +421,24 @@ function removeActiveAnnotationOutline() {
   }
 }
 
-function addActiveAnnotationOutline() {
-  if (activeAnnotation != undefined) {
+function addSelectedIntegrationOutline() {
+  if (selectedIntegration != undefined) {
     let glyphs = <d3.Selection<any, any, any, any>[]>(
-      soda.queryGlyphMap({ annotations: [activeAnnotation] })
+      soda.queryGlyphMap({ annotations: [selectedIntegration] })
     );
 
     for (const glyph of glyphs) {
-      glyph.style("stroke", occurrenceFillColor);
+      glyph.style("stroke", occurrenceSelectedColor);
     }
   }
 }
 
-function setActiveAnnotation(annotation: IntegrationAnnotation) {
-  removeActiveAnnotationOutline();
-  activeAnnotation = annotation;
-  addActiveAnnotationOutline();
+function setSelectedIntegration(annotation: IntegrationAnnotation) {
+  removeSelectedIntegrationOutline();
+  selectedIntegration = annotation;
+  addSelectedIntegrationOutline();
 
-  let phageName = activeAnnotation.phageName;
+  let phageName = selectedIntegration.phageName;
 
   // find the bacteria that have at least one integration of the selected phage
   let bacteriaNameSubset = bacteriaNames.filter((name) => {
@@ -437,14 +462,21 @@ function setActiveAnnotation(annotation: IntegrationAnnotation) {
 }
 
 function renderOccurrence() {
-  if (activeAnnotation == undefined) {
+  if (selectedBacteria == undefined) {
     console.error(
-      "activeAnnotation is undefined in call to renderOccurrence()"
+      "selectedBacteria is undefined in call to renderOccurrence()"
     );
     return;
   }
 
-  let phageName = activeAnnotation.phageName;
+  if (selectedIntegration == undefined) {
+    console.error(
+      "selectedIntegration is undefined in call to renderOccurrence()"
+    );
+    return;
+  }
+
+  let phageName = selectedIntegration.phageName;
   let phageIdx = phageNames.indexOf(phageName);
   let phageLength = phageLengths[phageIdx];
 
@@ -466,28 +498,51 @@ function renderOccurrence() {
     []
   );
 
-  let occurrences = new Array(phageLength).fill(0);
+  let occurrenceValues = new Array(phageLength).fill(0);
   for (const ann of integrations) {
     for (let i = ann.phageStart; i <= ann.phageEnd; i++) {
-      occurrences[i]++;
+      occurrenceValues[i]++;
     }
   }
 
-  let occurrenceAnnotation = {
+  let occurrences = {
     id: "occurrence-plot",
     start: 0,
     end: phageLength,
-    values: occurrences,
+    values: occurrenceValues,
   };
+
+  let selected = soda.slicePlotAnnotations({
+    annotations: [occurrences],
+    start: selectedIntegration.phageStart,
+    end: selectedIntegration.phageEnd,
+  })!.annotations[0];
+
+  selected.id = "selected-occurrence-integration";
+
+  let selectedBacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
+  let relatedIntegrations = integrationAnnotations[selectedBacteriaIdx].filter(
+    (a) => a.phageName == phageName && a != selectedIntegration
+  );
+
+  let related = relatedIntegrations.map((a) => {
+    return {
+      id: a.id,
+      start: a.phageStart,
+      end: a.phageEnd,
+    };
+  });
 
   let params = {
     start: 0,
     end: phageLength,
-    occurrences: occurrenceAnnotation,
+    occurrences,
+    selected,
+    related,
     genes: virusGeneAnnotations[phageIdx],
-    name: activeAnnotation.phageName,
-    virusStart: activeAnnotation.phageStart,
-    virusEnd: activeAnnotation.phageEnd,
+    name: selectedIntegration.phageName,
+    virusStart: selectedIntegration.phageStart,
+    virusEnd: selectedIntegration.phageEnd,
     rowCount: occurrenceRows,
   };
 
@@ -598,22 +653,7 @@ function renderTable(params: VirusRenderParams) {
 function renderOccurrenceBacteriaSelection(names: string[]) {
   let selection = d3.select("#vibes-occurrence-select");
 
-  // selection.style(
-  //   "height",
-  //   () => `${Math.min(occurrencesChart.viewportHeightPx, 300)}px`
-  // );
-
-  // selection
-  //   .append("div")
-  //   .style("margin-top", "5px")
-  //   .html("select all")
-  //   .on("mousedown", () => console.log("hello"));
-  //
-  // selection
-  //   .append("div")
-  //   .style("margin-top", "5px")
-  //   .html("select none")
-  //   .on("mousedown", () => console.log("hello"));
+  selection.selectAll("*").remove();
 
   selection
     .selectAll("div.selection")
@@ -682,17 +722,22 @@ function setChartHighlight(
 }
 
 function clear() {
-  activeAnnotation = undefined;
+  selectedIntegration = undefined;
   d3.select("div#vibes-bottom").selectAll("*").remove();
   linearBacteriaChart.clear();
   radialBacteriaChart.clear();
   occurrencesChart.clear();
 }
 
-function render(bacteriaName: string) {
+function render() {
   clear();
 
-  let bacteriaIdx = bacteriaNames.indexOf(bacteriaName);
+  if (selectedBacteria == undefined) {
+    console.error("selectedBacteria is undefined in call to render()");
+    return;
+  }
+
+  let bacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
   let integrations = integrationAnnotations[bacteriaIdx];
   let genes = bacteriaGeneAnnotations[bacteriaIdx];
 
@@ -723,10 +768,10 @@ function render(bacteriaName: string) {
   soda.clickBehavior({
     annotations: integrations,
     click(s, d): void {
-      setActiveAnnotation(d.a);
+      setSelectedIntegration(d.a);
     },
   });
 
   // we'll just default to setting the first phage annotation as "active"
-  setActiveAnnotation(integrationAnnotations[bacteriaIdx][0]);
+  setSelectedIntegration(integrationAnnotations[bacteriaIdx][0]);
 }

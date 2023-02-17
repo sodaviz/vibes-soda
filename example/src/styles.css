@@ -190,23 +190,15 @@ h1, h2, h3 {
 
 .field, .buttons, div.info {
     position: relative;
-    margin-left: 25%;
-    margin-right: 25%;
     padding: 25px;
-    width: auto;
-}
-
-.field.polya {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 90%;
 }
 
 .button {
     border: none;
     border-radius: 10px;
     color: white;
-    padding: 10px 16px;
+    /*padding: 10px 16px;*/
     text-align: center;
     text-decoration: none;
     display: inline-block;
@@ -317,4 +309,12 @@ input[type="file"]#file-input {
     -webkit-user-select: none; /* Safari */
     -ms-user-select: none; /* IE 10+ */
     user-select: none;
+}
+
+.flex {
+    display: flex
+}
+
+.center {
+    align-items: center 
 }
