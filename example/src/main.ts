@@ -57,6 +57,10 @@ let occurrenceBacteriaSelectionExpanded = false;
 let occurrenceMosaicEnabled = true;
 let occurrenceRelatedEnabled = true;
 
+interface DensityAnnotation extends soda.Annotation {
+  value: number;
+}
+
 interface IntegrationAnnotation extends soda.Annotation {
   // TODO: this needs bacteriaName
   phageName: string;
@@ -90,6 +94,9 @@ interface BacteriaRenderParams extends soda.RenderParams {
   integrations: IntegrationAnnotation[];
   genes: BacteriaGeneAnnotation[];
   updateDomain?: boolean;
+  layout: soda.VerticalLayout;
+  integrationRows: number;
+  geneRows: number;
 }
 
 interface VirusRenderParams extends soda.RenderParams {
@@ -162,7 +169,9 @@ let linearBacteriaChart = new soda.Chart<BacteriaRenderParams>({
   leftPadSize: 0,
   rightPadSize: 0,
   selector: "#vibes-top",
-  updateLayout() {},
+  updateLayout(params) {
+    this.layout = params.layout;
+  },
   updateDomain(params) {
     if (params.updateDomain == true || params.updateDomain == undefined) {
       this.defaultUpdateDomain(params);
@@ -175,40 +184,25 @@ let linearBacteriaChart = new soda.Chart<BacteriaRenderParams>({
       annotations: params.integrations,
       selector: "linear-bacteria-phages",
       fillColor: phageColor,
-      strokeColor: outlineColor,
     });
 
-    let aggregationResults = aggregateBacteriaGenes(this, params.genes);
+    let { density, filteredGenes } = aggregateBacteriaGenes(this, params.genes);
+
     soda.rectangle({
       chart: this,
-      annotations: aggregationResults.aggregated,
+      annotations: density,
       selector: "bacteria-genes-aggregated",
       fillColor: bacteriaGeneGroupColor,
-      strokeColor: outlineColor,
-      row: 1,
+      fillOpacity: (d) => d.a.value,
+      row: params.integrationRows,
+      height: this.rowHeight * params.geneRows,
     });
 
     soda.rectangle({
       chart: this,
-      annotations: aggregationResults.individual,
-      selector: "bacteria-genes-individual",
+      annotations: filteredGenes,
+      selector: "bacteria-genes",
       fillColor: bacteriaGeneColor,
-      strokeColor: outlineColor,
-      row: 1,
-    });
-
-    soda.tooltip({
-      chart: this,
-      annotations: aggregationResults.aggregated,
-      selector: "bacteria-genes-aggregated",
-      text: (d) => `aggregated group (${d.a.annotations.length})`,
-    });
-
-    soda.tooltip({
-      chart: this,
-      annotations: aggregationResults.individual,
-      selector: "bacteria-genes-individual",
-      text: (d) => `${d.a.name}`,
     });
   },
   postRender(): void {
@@ -233,11 +227,14 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
   ...chartConfig,
   selector: "#vibes-radial",
   padSize: 50,
+  trackHeightRatio: 0.15,
   axisConfig: {
     tickSizeOuter: 10,
     tickPadding: 15,
   },
-  updateLayout() {},
+  updateLayout(params) {
+    this.layout = params.layout;
+  },
   updateDomain(params) {
     if (params.updateDomain == true || params.updateDomain == undefined) {
       this.defaultUpdateDomain(params);
@@ -246,46 +243,32 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
   draw(params) {
     this.addAxis();
     let thisCasted = <soda.RadialChart<BacteriaRenderParams>>this;
-    thisCasted.addTrackOutline();
+    // thisCasted.addTrackOutline();
+
     soda.radialRectangle({
       chart: thisCasted,
       annotations: params.integrations,
-      selector: "radial-bacteria-phages",
+      selector: "linear-bacteria-phages",
       fillColor: phageColor,
-      strokeColor: outlineColor,
     });
 
-    let aggregationResults = aggregateBacteriaGenes(this, params.genes);
+    let { density, filteredGenes } = aggregateBacteriaGenes(this, params.genes);
+
     soda.radialRectangle({
       chart: thisCasted,
-      annotations: aggregationResults.aggregated,
+      annotations: density,
       selector: "bacteria-genes-aggregated",
       fillColor: bacteriaGeneGroupColor,
-      strokeColor: outlineColor,
-      row: 1,
+      fillOpacity: (d) => d.a.value,
+      row: params.integrationRows,
+      height: this.rowHeight * params.geneRows,
     });
 
     soda.radialRectangle({
       chart: thisCasted,
-      annotations: aggregationResults.individual,
-      selector: "bacteria-genes-individual",
+      annotations: filteredGenes,
+      selector: "bacteria-genes",
       fillColor: bacteriaGeneColor,
-      strokeColor: outlineColor,
-      row: 1,
-    });
-
-    soda.tooltip({
-      chart: this,
-      annotations: aggregationResults.aggregated,
-      selector: "bacteria-genes-aggregated",
-      text: (d) => `aggregated group (${d.a.annotations.length})`,
-    });
-
-    soda.tooltip({
-      chart: this,
-      annotations: aggregationResults.individual,
-      selector: "bacteria-genes-individual",
-      text: (d) => `${d.a.name}`,
     });
   },
   postRender(): void {
@@ -389,7 +372,7 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
       selector: "occurrence-plot-selected",
       rowSpan: plotRows - horizontalAxisRowSpan,
       fillColor: occurrenceSelectedColor,
-      fillOpacity: 0.25,
+      fillOpacity: 0.5,
     });
 
     soda.rectangle({
@@ -464,7 +447,7 @@ function removeSelectedIntegrationOutline() {
       soda.queryGlyphMap({ annotations: [selectedIntegration] })
     );
     for (const glyph of glyphs) {
-      glyph.style("stroke", outlineColor);
+      glyph.style("stroke", "none");
     }
   }
 }
@@ -685,7 +668,7 @@ function renderOccurrence() {
     let bacteriaColors = [];
     let colorIdx = 0;
     for (const bacteriaName of involvedBacteriaNames) {
-      bacteriaColors.push(bigColors[colorIdx & bigColors.length]);
+      bacteriaColors.push(bigColors[colorIdx % bigColors.length]);
       colorIdx++;
     }
 
@@ -934,33 +917,37 @@ function renderOccurrenceBacteriaSelection(names: string[]) {
 
 function aggregateBacteriaGenes(
   chart: soda.Chart<any>,
-  annotations: BacteriaGeneAnnotation[]
+  genes: BacteriaGeneAnnotation[]
 ): {
-  individual: BacteriaGeneAnnotation[];
-  aggregated: soda.AnnotationGroup<BacteriaGeneAnnotation>[];
+  density: DensityAnnotation[];
+  filteredGenes: BacteriaGeneAnnotation[];
 } {
-  let domain = chart.xScale.domain();
-  annotations = annotations.filter(
-    (a) => a.start < domain[1] && a.end > domain[0]
-  );
+  let domainWidth = chart.domain[1] - chart.domain[0];
+  let filteredGenes: BacteriaGeneAnnotation[] = [];
+  let density: DensityAnnotation[] = [];
+  if (domainWidth > 1000000) {
+    let chunkWidth = domainWidth / 10;
+    for (let i = 0; i < 10; i++) {
+      let start = chart.domain[0] + i * chunkWidth;
+      let end = chart.domain[0] + (i + 1) * chunkWidth;
+      let value =
+        genes
+          .filter((a) => a.start >= start && a.end <= end)
+          .reduce((acc, curr) => acc + (curr.end - curr.start), 0) / chunkWidth;
 
-  let tolerance = 1000 / chart.transform.k;
-  if (tolerance < 10) {
-    return { individual: annotations, aggregated: [] };
+      density.push({
+        id: `{agg-i}`,
+        start,
+        end,
+        value,
+      });
+    }
+  } else {
+    filteredGenes = genes.filter(
+      (a) => a.start <= chart.domain[1] && a.end >= chart.domain[0]
+    );
   }
-  let aggregated = soda.aggregateIntransitive({
-    annotations,
-    criterion: (a, b) =>
-      a.start - tolerance < b.end && a.end + tolerance > b.start,
-  });
-
-  let individual = aggregated
-    .filter((a) => a.annotations.length == 1)
-    .map((a) => a.annotations[0]);
-
-  aggregated = aggregated.filter((a) => a.annotations.length > 1);
-
-  return { individual, aggregated };
+  return { density, filteredGenes };
 }
 
 function setChartHighlight(
@@ -995,13 +982,31 @@ function render() {
   let integrations = integrationAnnotations[bacteriaIdx];
   let genes = bacteriaGeneAnnotations[bacteriaIdx];
 
+  let integrationLayout = soda.intervalGraphLayout(integrations, 100);
+  let integrationRows = integrationLayout.rowCount;
+
+  let geneLayout = soda.intervalGraphLayout(genes, 100);
+  let geneRows = geneLayout.rowCount;
+
+  integrationLayout.rowCount += geneRows;
+
+  // combine the layouts
+  for (const gene of genes) {
+    integrationLayout.rowMap.set(
+      gene.id,
+      geneLayout.rowMap.get(gene.id)! + integrationRows
+    );
+  }
+
   // we use the same render params for the linear & radial bacteria charts
   let bacteriaRenderParams = {
     integrations,
     genes,
     start: 0,
     end: bacteriaLengths[bacteriaIdx],
-    rowCount: 2,
+    layout: integrationLayout,
+    integrationRows,
+    geneRows,
   };
 
   linearBacteriaChart.render(bacteriaRenderParams);
