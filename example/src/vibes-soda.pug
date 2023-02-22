@@ -53,8 +53,17 @@ button.collapsible info
     #vibes-top
     #vibes-mid
       #vibes-radial(style="width: 50%")
-      #container
-        #vibes-occurrence-select(style="width: min-content; padding: 5px; outline: 1px solid black; background-color: white")
+      #vibes-occurrence-select-container
+        #vibes-occurrence-select
+          #vibes-occurrence-controls
+            button#vibes-occurrence-expand-button &#65291;
+            button#vibes-occurrence-select-all-button select all
+            button#vibes-occurrence-select-none-button select none
+            label mosaic
+            input(type="checkbox", checked)#vibes-occurrence-mosaic
+            label same
+            input(type="checkbox", checked)#vibes-occurrence-same
+          #vibes-occurrence-select-inner  
       #vibes-occurrence(style="width: 50%")
     #vibes-bottom
 

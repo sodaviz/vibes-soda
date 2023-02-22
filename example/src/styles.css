@@ -7,7 +7,7 @@
 
 body {
     /*margin: 0;*/
-    font-family: "Proza Libre","Helvetica Neue",Helvetica,Arial,"Lucida Grande",sans-serif;
+    font-family: "Proza Libre", "Helvetica Neue", Helvetica, Arial, "Lucida Grande", sans-serif;
     background-color: var(--background-color);
     /*color: #f2f2f2;*/
 }
@@ -168,7 +168,7 @@ h1, h2, h3 {
     text-align: center;
 }
 
-.page-description h1  {
+.page-description h1 {
     font-size: 50px;
     margin: 0;
 }
@@ -215,23 +215,23 @@ h1, h2, h3 {
     color: white;
 }
 
-.drop-input-text{
+.drop-input-text {
     width: 100px;
     outline: none;
-    border:none;
+    border: none;
     border-bottom: 1px solid #777;
     box-shadow: none !important;
 }
 
-.input-text{
+.input-text {
     width: 100%;
     outline: none;
-    border:none;
+    border: none;
     border-bottom: 1px solid #777;
     box-shadow: none !important;
 }
 
-.input-text:focus{
+.input-text:focus {
     border-color: var(--primary-color);
     border-width: medium medium 2px;
 }
@@ -261,8 +261,8 @@ input:not(:focus):valid ~ .floating-label {
     opacity: 0.5;
 }
 
-input:focus ~.floating-label,
-select:focus ~.drop-floating-label {
+input:focus ~ .floating-label,
+select:focus ~ .drop-floating-label {
     color: var(--primary-color);
     opacity: 1.0;
 }
@@ -294,7 +294,7 @@ input[type="file"]#file-input {
 
 .autocomplete > div:hover:not(.group),
 .autocomplete > div.selected {
-    background: #81ca91;
+    background: var(--primary-color);
     cursor: pointer;
 }
 
@@ -302,13 +302,38 @@ input[type="file"]#file-input {
     display: flex
 }
 
+#vibes-occurrence-select-container {
+    position: relative;
+}
+
 #vibes-occurrence-select {
     position: absolute;
-    display: flex;
-    flex-direction: column;
+    top: 5px;
+    left: 5px;
+    height: 29px;
+    width: 34px;
+    outline: 1px solid black;
+    background-color: white;
+    overflow: hidden;
+}
+
+#vibes-occurrence-controls {
+    position: absolute;
+    width: 400px;
+    top: 2px;
+    left: 2px;
+}
+
+#vibes-occurrence-select-inner {
     -webkit-user-select: none; /* Safari */
     -ms-user-select: none; /* IE 10+ */
     user-select: none;
+    cursor: pointer;
+    font: 14px/22px "-apple-system", BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin-top: 30px;
+    padding: 10px;
+    /*outline: 1px solid red;*/
+    overflow: hidden;
 }
 
 .flex {
@@ -316,5 +341,5 @@ input[type="file"]#file-input {
 }
 
 .center {
-    align-items: center 
+    align-items: center
 }

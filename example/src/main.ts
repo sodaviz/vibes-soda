@@ -53,6 +53,12 @@ interface VirusGeneAnnotation extends soda.Annotation {
   evalue: number;
 }
 
+interface FillAnnotation extends soda.Annotation {
+  bacteriaName: string;
+  color: string;
+  row: number;
+}
+
 interface BacteriaRenderParams extends soda.RenderParams {
   integrations: IntegrationAnnotation[];
   genes: BacteriaGeneAnnotation[];
@@ -63,6 +69,7 @@ interface VirusRenderParams extends soda.RenderParams {
   occurrences: soda.PlotAnnotation;
   selected: soda.PlotAnnotation;
   related: soda.Annotation[];
+  fill: FillAnnotation[];
   genes: VirusGeneAnnotation[];
   name: string;
 }
@@ -275,7 +282,7 @@ let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
 let occurrencesChart = new soda.Chart<VirusRenderParams>({
   ...chartConfig,
   selector: "#vibes-occurrence",
-  upperPadSize: 5,
+  upperPadSize: 50,
   updateLayout() {},
   updateDimensions(params): void {
     let height =
@@ -287,25 +294,29 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
   },
   draw(params): void {
     let geneLayout = soda.intervalGraphLayout(params.genes, 100);
-    let relatedLayout = soda.intervalGraphLayout(params.related, 10);
+    // let relatedLayout = soda.intervalGraphLayout(params.related, 10);
 
     let geneRows = geneLayout.rowCount + 1;
-    let relatedRows = relatedLayout.rowCount + 1;
+    // let relatedRows = relatedLayout.rowCount + 1;
     let plotRows = occurrenceRows - geneRows;
 
     for (const id of geneLayout.rowMap.keys()) {
       geneLayout.rowMap.set(id, geneLayout.rowMap.get(id)! + plotRows);
     }
 
-    for (const id of relatedLayout.rowMap.keys()) {
-      relatedLayout.rowMap.set(
-        id,
-        relatedLayout.rowMap.get(id)! + plotRows - relatedRows - 2
-      );
-    }
+    // for (const id of relatedLayout.rowMap.keys()) {
+    //   relatedLayout.rowMap.set(
+    //     id,
+    //     relatedLayout.rowMap.get(id)! + plotRows - relatedRows - 2
+    //   );
+    // }
 
     let horizontalAxisYOffset = -2;
     let horizontalAxisRowSpan = 2;
+    let verticalAxisRowSpan = plotRows - horizontalAxisRowSpan;
+    let verticalAxisHeightPx = verticalAxisRowSpan * this.rowHeight;
+    let nFillRows = Math.max(...params.fill.map((a) => a.row)) + 1;
+    let fillRowHeight = verticalAxisHeightPx / nFillRows;
 
     soda.horizontalAxis({
       chart: this,
@@ -329,7 +340,7 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
       domain: [0, maxValue],
       target: this.overflowViewportSelection,
       x: 0,
-      rowSpan: plotRows - horizontalAxisRowSpan,
+      rowSpan: verticalAxisRowSpan,
       axisType: soda.AxisType.Left,
     });
 
@@ -356,12 +367,15 @@ let occurrencesChart = new soda.Chart<VirusRenderParams>({
 
     soda.rectangle({
       chart: this,
-      annotations: params.related,
-      selector: "occurrence-plot-related",
-      fillColor: occurrenceRelatedColor,
-      fillOpacity: 0.75,
-      row: (d) => relatedLayout.row(d),
-      height: this.rowHeight / 2,
+      annotations: params.fill,
+      selector: "occurrence-plot-fill",
+      fillColor: (d) => d.a.color,
+      fillOpacity: 0.5,
+      // strokeColor: "black",
+      y: (d) => {
+        return fillRowHeight * (nFillRows - d.a.row - 1);
+      },
+      height: fillRowHeight,
     });
 
     soda.rectangle({
@@ -483,14 +497,26 @@ function renderOccurrence() {
   // find the annotations for each integration of the selected phage
   //   - we search across integration annotations of each bacterial genome
   //   - we exclude bacterial genomes that are not in the inclusion map
-  let integrations = integrationAnnotations.reduce<IntegrationAnnotation[]>(
+  type FillIntegrationAnnotation = IntegrationAnnotation & {
+    bacteriaName: string;
+  };
+
+  let integrations = integrationAnnotations.reduce<FillIntegrationAnnotation[]>(
     (accumulatedIntegrations, currentIntegrations, bacteriaIdx) => {
       let bacteriaName = bacteriaNames[bacteriaIdx];
       if (occurrenceBacteriaInclusionMap.get(bacteriaName) == true) {
         let matches = currentIntegrations.filter(
           (a: IntegrationAnnotation) => a.phageName == phageName
         );
-        return accumulatedIntegrations.concat(matches);
+
+        let fillAnnotations = matches.map((match) => {
+          return {
+            ...match,
+            bacteriaName,
+          };
+        });
+
+        return accumulatedIntegrations.concat(fillAnnotations);
       } else {
         return accumulatedIntegrations;
       }
@@ -499,20 +525,25 @@ function renderOccurrence() {
   );
 
   let occurrenceValues = new Array(phageLength).fill(0);
+  let involvedBacteriaNames: string[] = [];
   for (const ann of integrations) {
+    if (involvedBacteriaNames.indexOf(ann.bacteriaName) < 0) {
+      involvedBacteriaNames.push(ann.bacteriaName);
+    }
+
     for (let i = ann.phageStart; i <= ann.phageEnd; i++) {
       occurrenceValues[i]++;
     }
   }
 
-  let occurrences = {
+  let occurrences: soda.PlotAnnotation = {
     id: "occurrence-plot",
     start: 0,
     end: phageLength,
     values: occurrenceValues,
   };
 
-  let selected = soda.slicePlotAnnotations({
+  let selected: soda.PlotAnnotation = soda.slicePlotAnnotations({
     annotations: [occurrences],
     start: selectedIntegration.phageStart,
     end: selectedIntegration.phageEnd,
@@ -520,25 +551,115 @@ function renderOccurrence() {
 
   selected.id = "selected-occurrence-integration";
 
-  let selectedBacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
-  let relatedIntegrations = integrationAnnotations[selectedBacteriaIdx].filter(
-    (a) => a.phageName == phageName && a != selectedIntegration
-  );
+  // let selectedBacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
 
-  let related = relatedIntegrations.map((a) => {
-    return {
-      id: a.id,
-      start: a.phageStart,
-      end: a.phageEnd,
-    };
-  });
+  // let relatedIntegrations = integrationAnnotations[selectedBacteriaIdx].filter(
+  //   (a) => a.phageName == phageName && a != selectedIntegration
+  // );
+
+  // let related = relatedIntegrations.map((a) => {
+  //   return {
+  //     id: a.id,
+  //     start: a.phageStart,
+  //     end: a.phageEnd,
+  //   };
+  // });
+
+  let fillSlicePoints: number[] = [];
+  let prevVal = -1;
+  for (const [i, val] of occurrenceValues.entries()) {
+    if (prevVal != val) {
+      fillSlicePoints.push(i);
+    }
+    prevVal = val;
+  }
+
+  let bigColors = [
+    "#f44336",
+    "#e81e63",
+    "#9c27b0",
+    "#673ab7",
+    "#3f51b5",
+    "#2196f3",
+    "#03a9f4",
+    "#00bcd4",
+    "#009688",
+    "#4caf50",
+    "#8bc34a",
+    "#cddc39",
+    "#ffeb3b",
+    "#ffc107",
+    "#ff9800",
+    "#ff5722",
+    "#795548",
+    "#9e9e9e",
+    "#607d8b",
+  ];
+
+  let sliceAnnotations = [];
+
+  for (let i = 1; i < fillSlicePoints.length; i++) {
+    let annInThisSlice: FillAnnotation[][] = [];
+
+    for (const b of involvedBacteriaNames) {
+      annInThisSlice.push([]);
+    }
+
+    let [start, end] = [fillSlicePoints[i - 1], fillSlicePoints[i]];
+    let overlapping = [];
+    for (const ann of integrations) {
+      if (ann.phageStart < end && ann.phageEnd > start) {
+        overlapping.push(ann);
+      }
+    }
+
+    for (const ov of overlapping) {
+      let ovIdx = involvedBacteriaNames.indexOf(ov.bacteriaName);
+      annInThisSlice[ovIdx].push({
+        id: ov.id,
+        bacteriaName: ov.bacteriaName,
+        start: Math.max(ov.phageStart, start),
+        end: Math.min(ov.phageEnd, end),
+        color: "",
+        row: 0,
+      });
+    }
+    sliceAnnotations.push(annInThisSlice);
+  }
+
+  let bacteriaColors = [];
+  let colorIdx = 0;
+  for (const bacteriaName of involvedBacteriaNames) {
+    bacteriaColors.push(bigColors[colorIdx]);
+    colorIdx++;
+    if (colorIdx > bigColors.length - 1) {
+      colorIdx = 0;
+    }
+  }
+
+  for (const sliceGroup of sliceAnnotations) {
+    let row = 0;
+    for (
+      let bacteriaIdx = 0;
+      bacteriaIdx < involvedBacteriaNames.length;
+      bacteriaIdx++
+    ) {
+      for (const ann of sliceGroup[bacteriaIdx]) {
+        ann.row = row++;
+        ann.color = bacteriaColors[bacteriaIdx];
+      }
+    }
+  }
+
+  let fill = sliceAnnotations.flat(3);
 
   let params = {
     start: 0,
     end: phageLength,
     occurrences,
     selected,
-    related,
+    related: [],
+    fill,
     genes: virusGeneAnnotations[phageIdx],
     name: selectedIntegration.phageName,
     virusStart: selectedIntegration.phageStart,
@@ -650,30 +771,71 @@ function renderTable(params: VirusRenderParams) {
     .style("padding", "1px 0.5em");
 }
 
+let occurrenceBacteriaSelectionExpanded = false;
+
 function renderOccurrenceBacteriaSelection(names: string[]) {
-  let selection = d3.select("#vibes-occurrence-select");
+  let outerSelection = d3.select("#vibes-occurrence-select");
 
-  selection.selectAll("*").remove();
+  let buttonSelection = d3.select("button#vibes-occurrence-expand-button");
+  buttonSelection
+    .html(() => {
+      if (occurrenceBacteriaSelectionExpanded) {
+        return "－";
+      } else {
+        return "＋";
+      }
+    })
+    .on("click", (d, i, nodes) => {
+      occurrenceBacteriaSelectionExpanded =
+        !occurrenceBacteriaSelectionExpanded;
 
-  selection
+      let selection = d3.select(nodes[i]);
+      if (occurrenceBacteriaSelectionExpanded) {
+        selection.html("－");
+        outerSelection
+          .transition()
+          .duration(100)
+          .style("height", "500px")
+          .style("width", "500px");
+      } else {
+        selection.html("＋");
+        outerSelection
+          .transition()
+          .duration(100)
+          .style("height", "29px")
+          .style("width", "34px");
+      }
+    });
+
+  let innerSelection = d3.select("div#vibes-occurrence-select-inner");
+
+  innerSelection.selectAll("div.selection").remove();
+
+  innerSelection
     .selectAll("div.selection")
     .data(names)
     .enter()
     .append("div")
     .attr("class", "selection")
-    .style("margin-top", "5px")
     .html((d) => d)
-    .style("background-color", (d) =>
-      occurrenceBacteriaInclusionMap.get(d) == true ? "gainsboro" : "white"
+    .style("margin-top", "5px")
+    .style("font-weight", (d) =>
+      occurrenceBacteriaInclusionMap.get(d) == true ? "bold" : "normal"
     )
+    .on("mouseover", (d, i, nodes) => {
+      d3.select(nodes[i]).style("background-color", "cadetblue");
+    })
+    .on("mouseout", (d, i, nodes) => {
+      d3.select(nodes[i]).style("background-color", "white");
+    })
     .on("mousedown", (d, i, nodes) => {
-      if (occurrenceBacteriaInclusionMap.get(d) == true) {
-        occurrenceBacteriaInclusionMap.set(d, false);
-        d3.select(nodes[i]).style("background-color", "white");
-      } else {
-        occurrenceBacteriaInclusionMap.set(d, true);
-        d3.select(nodes[i]).style("background-color", "gainsboro");
-      }
+      occurrenceBacteriaInclusionMap.set(
+        d,
+        !occurrenceBacteriaInclusionMap.get(d)
+      );
+      d3.select(nodes[i]).style("font-weight", () =>
+        occurrenceBacteriaInclusionMap.get(d) == true ? "bold" : "normal"
+      );
       renderOccurrence();
     });
 }
