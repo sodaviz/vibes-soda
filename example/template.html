@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>vibes-soda</title>
+    <style>VIBES_CSS_TARGET</style>
+  </head>
+    <div id="viz" style="margin-left: 15%; margin-right: 15%">
+      <div class="flex center">
+        <div class="field">
+          <input class="input-text" type="text" autocomplete="off" required id="bacteria-selection"><span class="floating-label">Bacteria</span>
+        </div>
+        <button class="button" id="clear" style="height: 32px">clear</button>
+      </div>
+      <div id="charts" style="width: 100%">
+        <div id="vibes-top"></div>
+        <div id="vibes-mid">
+          <div id="vibes-radial" style="width: 50%"></div>
+          <div id="vibes-occurrence-select-container">
+            <div id="vibes-occurrence-select">
+              <div id="vibes-occurrence-controls">
+                <button id="vibes-occurrence-expand-button">&#65291;</button>
+                <button id="vibes-occurrence-select-all-button">select all</button>
+                <button id="vibes-occurrence-select-none-button">select none</button>
+                <label>mosaic</label>
+                <input type="checkbox" checked id="vibes-occurrence-mosaic-toggle">
+                <label>related</label>
+                <input type="checkbox" checked id="vibes-occurrence-related-toggle">
+              </div>
+              <div id="vibes-occurrence-select-inner"> </div>
+            </div>
+          </div>
+          <div id="vibes-occurrence" style="width: 50%"></div>
+        </div>
+        <div id="vibes-bottom"></div>
+      </div>
+    </div>
+    <script>VIBES_DATA_TARGET</script>
+    <script>VIBES_SODA_TARGET</script>
+    <script>
+        let bacteriaSeqNames = [];
+        let virusNames = [];
+        let integrationAnnotations = [];
+        let bacterialGeneAnnotations = [];
+        let viralGeneAnnotations = [];
+        
+        let id = 0;
+
+        for (const bacteriaName in integrationsData) {
+            for (const seqName in integrationsData[bacteriaName]) {
+                annList = [];
+                bacteriaSeqNames.push(seqName);
+
+                let integrationObj = integrationsData[bacteriaName][seqName];
+                let numAnn = integrationObj["starts"].length
+                for (let i = 0; i < numAnn; i++) {
+                    annList.push({
+                        id: `${id++}`,
+                        start: integrationObj["starts"][i],
+                        end: integrationObj["ends"][i],
+                        phageName: integrationObj["virus_names"][i],
+                        phageStart: integrationObj["virus_starts"][i],
+                        phageEnd: integrationObj["virus_ends"][i],
+                        strand: integrationObj["strands"][i],
+                        evalue: integrationObj["evalues"][i],
+                    })
+                }
+                
+                integrationAnnotations.push(annList);
+            }
+
+            for (const seqName in bacterialGenesData[bacteriaName]) {
+                annList = [];
+
+                let bacterialGeneObj = bacterialGenesData[bacteriaName][seqName];
+                let numAnn = bacterialGeneObj["starts"].length
+                for (let i = 0; i < numAnn; i++) {
+                    annList.push({
+                        id: `${id++}`,
+                        start: bacterialGeneObj["starts"][i],
+                        end: bacterialGeneObj["ends"][i],
+                        strand: bacterialGeneObj["strands"][i],
+                        name: bacterialGeneObj["labels"][i],
+                    })
+                }
+                bacterialGeneAnnotations.push(annList);
+            }
+        }
+
+        for (const virusName in viralGenesData) {
+            annList = [];
+
+            virusNames.push(virusName);
+            let viralGeneObj = viralGenesData[virusName];
+            let numAnn = viralGeneObj["starts"].length
+            for (let i = 0; i < numAnn; i++) {
+                annList.push({
+                    id: `${id++}`,
+                    start: viralGeneObj['starts'][i],
+                    end: viralGeneObj['ends'][i],
+                    modelStart: viralGeneObj['model_starts'][i],
+                    modelEnd: viralGeneObj['model_ends'][i],
+                    modelLength: viralGeneObj['model_lengths'][i],
+                    name: viralGeneObj['labels'][i],
+                    strand: viralGeneObj['strands'][i],
+                    evalue: viralGeneObj['evalues'][i],
+                })
+            }
+            viralGeneAnnotations.push(annList);
+        }
+        
+        let params = {
+            bacteriaNames: bacteriaSeqNames,
+            phageNames: virusNames,
+            phageLengths: virusLengths,
+            bacteriaLengths: bacteriaLengths,
+            integrationAnnotations,
+            virusGeneAnnotations: viralGeneAnnotations,
+            bacteriaGeneAnnotations: bacterialGeneAnnotations,
+        };
+        console.log(params);
+        vs.f(params);
+    </script>
+  </body>
+</html>

@@ -12,3 +12,12 @@ serve: build
 	@echo "Running server on localhost:8080"
 	@echo "Use ctrl-c to stop"
 	@python3 -m http.server -d build/ -b localhost 8080 && echo "Bye bye!"
+
+
+bundle:
+	@echo "Building vibes-soda bundle..."
+	# npx esbuild --bundle src/main.ts --outfile=vibes-soda.js --minify --global-name=vs
+	npx esbuild --bundle src/main.ts --outfile=vibes-soda.js --global-name=vs
+
+blob: bundle
+	python3 inject.py
