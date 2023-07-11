@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>vibes-soda</title>
+    <style>VIBES_CSS_TARGET</style>
+  </head>
+    <div id="viz" style="margin-left: 15%; margin-right: 15%">
+      <div class="flex center">
+        <div class="field">
+          <input class="input-text" type="text" autocomplete="off" required id="bacteria-selection"><span class="floating-label">Bacteria</span>
+        </div>
+        <button class="button" id="clear" style="height: 32px">clear</button>
+      </div>
+      <div id="charts" style="width: 100%">
+        <div id="vibes-top"></div>
+        <div id="vibes-mid">
+          <div id="vibes-radial" style="width: 50%"></div>
+          <div id="vibes-occurrence-select-container">
+            <div id="vibes-occurrence-select">
+              <div id="vibes-occurrence-controls">
+                <button id="vibes-occurrence-expand-button">&#65291;</button>
+                <button id="vibes-occurrence-select-all-button">select all</button>
+                <button id="vibes-occurrence-select-none-button">select none</button>
+                <label>related</label>
+                <input type="checkbox" checked id="vibes-occurrence-related-toggle">
+              </div>
+              <div id="vibes-occurrence-select-inner"> </div>
+            </div>
+          </div>
+          <div id="vibes-occurrence" style="width: 50%"></div>
+        </div>
+        <div id="vibes-bottom"></div>
+      </div>
+    </div>
+    <script>VIBES_DATA_TARGET</script>
+    <script>VIBES_SODA_TARGET</script>
+    <script>
+        vs.run(
+            integrationsData,
+            bacteriaLengths,
+            bacterialGenesData,
+            virusLengths,
+            viralGenesData,
+        );
+    </script>
+  </body>
+</html>
