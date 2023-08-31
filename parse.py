@@ -164,7 +164,6 @@ class VsData:
         with open(path, "r") as f:
             lines = f.readlines()
             for line in lines[1:]:
-
                 if line.startswith("#"):
                     continue
                 elif line.startswith(">"):
@@ -243,9 +242,13 @@ class VsData:
 
 data = VsData()
 
-bacterial_gene_paths = glob.glob("./output/gff/*.gff")
-integrations_paths = glob.glob("./output/tsv/bacterial_integrations/*.tsv")
-viral_gene_paths = glob.glob("./output/tsv/viral_gene_annotations/*.tsv")
+bacterial_gene_paths = glob.glob("./output/vibes_soda_output/gff/*.gff")
+integrations_paths = glob.glob(
+    "./output/vibes_soda_output/tsv/bacterial_integrations/*.tsv"
+)
+viral_gene_paths = glob.glob(
+    "./output/vibes_soda_output/tsv/viral_gene_annotations/*.tsv"
+)
 
 bacterial_gene_paths.sort()
 integrations_paths.sort()
@@ -264,24 +267,21 @@ for path in viral_gene_paths:
 for path in bacterial_gene_paths:
     data.parse_bacterial_gene_gff3(path)
 
-
 with open("data.js", "w") as out:
-    out.write('let bacteriaLengths = [')
+    out.write("let bacteriaLengths = [")
     for seq_name in data.bacteria_lengths:
         seq_len = data.bacteria_lengths[seq_name]
-        out.write('{},'.format(seq_len))
-    out.write('];\n')
+        out.write("{},".format(seq_len))
+    out.write("];\n")
 
-    out.write('let virusLengths = [')
+    out.write("let virusLengths = [")
     for seq_name in data.virus_lengths:
         seq_len = data.virus_lengths[seq_name]
-        out.write('{},'.format(seq_len))
-    out.write('];\n')
+        out.write("{},".format(seq_len))
+    out.write("];\n")
 
-    out.write('let integrationsData = {};\n'.format(
-        json.dumps(data.integrations)))
-    out.write('let viralGenesData = {};\n'.format(
-        json.dumps(data.viral_genes)))
-    out.write('let bacterialGenesData = {};\n;'.format(
-        json.dumps(data.bacterial_genes)))
-
+    out.write("let integrationsData = {};\n".format(json.dumps(data.integrations)))
+    out.write("let viralGenesData = {};\n".format(json.dumps(data.viral_genes)))
+    out.write(
+        "let bacterialGenesData = {};\n;".format(json.dumps(data.bacterial_genes))
+    )
