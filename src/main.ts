@@ -1,5 +1,5 @@
-import autocomplete from "autocompleter";
 import * as soda from "@sodaviz/soda";
+import autocomplete from "autocompleter";
 import * as d3 from "d3";
 
 interface DensityAnnotation extends soda.Annotation {
@@ -53,10 +53,10 @@ interface BacteriaNameItem {
 
 function buildAnnotations(
   integrationsData: any,
-  bacterialGenesData: any,
-  viralGenesData: any,
+  bacterialGeneData: any,
+  viralGeneData: any,
 ) {
-  let bacteriaNames = [];
+  let bacteriaSeqNames = [];
   let virusNames = [];
   let integrationAnnotations = [];
   let bacterialGeneAnnotations = [];
@@ -65,62 +65,58 @@ function buildAnnotations(
   let idCount = 0;
 
   let annList = [];
-  for (const bacteriaName in integrationsData) {
-    for (const seqName in integrationsData[bacteriaName]) {
-      annList = [];
-      bacteriaNames.push(seqName);
+  for (const seqName in integrationsData) {
+    annList = [];
+    bacteriaSeqNames.push(seqName);
 
-      let integrationObj = integrationsData[bacteriaName][seqName];
-      let numAnn = integrationObj["starts"].length;
-      for (let i = 0; i < numAnn; i++) {
-        annList.push({
-          id: `${idCount++}`,
-          start: integrationObj["starts"][i],
-          end: integrationObj["ends"][i],
-          bacteriaName: bacteriaName,
-          virusName: integrationObj["virus_names"][i],
-          virusStart: integrationObj["virus_starts"][i],
-          virusEnd: integrationObj["virus_ends"][i],
-          strand: integrationObj["strands"][i],
-          evalue: integrationObj["evalues"][i],
-        });
-      }
-
-      integrationAnnotations.push(annList);
+    let integrationObj = integrationsData[seqName];
+    let numAnn = integrationObj["starts"].length;
+    for (let i = 0; i < numAnn; i++) {
+      annList.push({
+        id: `${idCount++}`,
+        start: integrationObj["starts"][i],
+        end: integrationObj["ends"][i],
+        bacteriaName: "TEMPTEMP",
+        virusName: integrationObj["virusNames"][i],
+        virusStart: integrationObj["virusStarts"][i],
+        virusEnd: integrationObj["virusEnds"][i],
+        strand: integrationObj["strands"][i],
+        evalue: integrationObj["evalues"][i],
+      });
     }
 
-    for (const seqName in bacterialGenesData[bacteriaName]) {
-      annList = [];
+    integrationAnnotations.push(annList);
 
-      let bacterialGeneObj = bacterialGenesData[bacteriaName][seqName];
-      let numAnn = bacterialGeneObj["starts"].length;
-      for (let i = 0; i < numAnn; i++) {
-        annList.push({
-          id: `${idCount++}`,
-          start: bacterialGeneObj["starts"][i],
-          end: bacterialGeneObj["ends"][i],
-          strand: bacterialGeneObj["strands"][i],
-          name: bacterialGeneObj["labels"][i],
-        });
-      }
-      bacterialGeneAnnotations.push(annList);
+    annList = [];
+
+    let bacterialGeneObj = bacterialGeneData[seqName];
+    numAnn = bacterialGeneObj["starts"].length;
+    for (let i = 0; i < numAnn; i++) {
+      annList.push({
+        id: `${idCount++}`,
+        start: bacterialGeneObj["starts"][i],
+        end: bacterialGeneObj["ends"][i],
+        strand: bacterialGeneObj["strands"][i],
+        name: bacterialGeneObj["labels"][i],
+      });
     }
+    bacterialGeneAnnotations.push(annList);
   }
 
-  for (const virusName in viralGenesData) {
+  for (const virusName in viralGeneData) {
     annList = [];
 
     virusNames.push(virusName);
-    let viralGeneObj = viralGenesData[virusName];
+    let viralGeneObj = viralGeneData[virusName];
     let numAnn = viralGeneObj["starts"].length;
     for (let i = 0; i < numAnn; i++) {
       annList.push({
         id: `${idCount++}`,
         start: viralGeneObj["starts"][i],
         end: viralGeneObj["ends"][i],
-        modelStart: viralGeneObj["model_starts"][i],
-        modelEnd: viralGeneObj["model_ends"][i],
-        modelLength: viralGeneObj["model_lengths"][i],
+        modelStart: viralGeneObj["modelStarts"][i],
+        modelEnd: viralGeneObj["modelEnds"][i],
+        modelLength: viralGeneObj["modelLengths"][i],
         name: viralGeneObj["labels"][i],
         strand: viralGeneObj["strands"][i],
         evalue: viralGeneObj["evalues"][i],
@@ -130,7 +126,7 @@ function buildAnnotations(
   }
 
   return {
-    bacteriaNames,
+    bacteriaSeqNames,
     virusNames,
     integrationAnnotations,
     viralGeneAnnotations,
@@ -139,19 +135,27 @@ function buildAnnotations(
 }
 
 export function run(
-  integrationsData: any,
+  // {bacteriaSeqName: {starts: [], ends: [], ...} ...}
+  integrationData: any,
+  // {bacteriaSeqName: {starts: [], ends: [], ...} ...}
+  bacterialGeneData: any,
+  // {virusName: {starts: [], ends: [], ...} ...}
+  viralGeneData: any,
+  // [<L1>, <L2>, ...]
   bacteriaLengths: any,
-  bacterialGenesData: any,
+  // [<L1>, <L2>, ...]
   virusLengths: any,
-  viralGenesData: any,
+  // {virusName: [<O1>, <O2>, ...], ...}
+  occurrences: any,
 ) {
   let params = buildAnnotations(
-    integrationsData,
-    bacterialGenesData,
-    viralGenesData,
+    integrationData,
+    bacterialGeneData,
+    viralGeneData,
   );
 
-  let bacteriaNames = params.bacteriaNames;
+  console.log(params);
+  let bacteriaNames = params.bacteriaSeqNames;
   let virusNames = params.virusNames;
   let integrationAnnotations = params.integrationAnnotations;
   let virusGeneAnnotations = params.viralGeneAnnotations;
@@ -544,7 +548,8 @@ export function run(
 
     let phageName = selectedIntegration.virusName;
 
-    // find the bacteria that have at least one integration of the selected phage
+    // find the bacteria that have at least one integration of the selected
+    // phage
     let bacteriaNameSubset = bacteriaNames.filter((name) => {
       let bacteriaIdx = bacteriaNames.indexOf(name);
       let annotations = integrationAnnotations[bacteriaIdx];
