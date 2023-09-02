@@ -248,9 +248,9 @@ class VsData:
 
 data = VsData()
 
-bacterial_gene_paths = glob.glob("./tiny/gff/*.gff")
-integrations_paths = glob.glob("./tiny/tsv/bacterial_integrations/*.tsv")
-viral_gene_paths = glob.glob("./tiny/tsv/viral_gene_annotations/*.tsv")
+bacterial_gene_paths = glob.glob("./output/gff/*.gff")
+integrations_paths = glob.glob("./output/tsv/bacterial_integrations/*.tsv")
+viral_gene_paths = glob.glob("./output/tsv/viral_gene_annotations/*.tsv")
 
 bacterial_gene_paths.sort()
 integrations_paths.sort()
@@ -275,10 +275,8 @@ for path in bacterial_gene_paths:
 bacteria_names = list(data.integrations.keys())
 
 vibes_soda_bundle = open("./vibes-soda.js").read()
-styles = open("./src/styles.css").read()
 template_html = open("./src/template.html").read()
 blob = template_html.replace("VIBES_SODA_TARGET", vibes_soda_bundle)
-blob = blob.replace("VIBES_CSS_TARGET", styles)
 
 # for every bacterial genome
 for bacteria_name in bacteria_names:
@@ -307,7 +305,9 @@ for bacteria_name in bacteria_names:
             occurrences[name] = data.occurrences[name]
 
     data_str = """
-    let bacteriaLengths = [{}];
+    let bacteriaNames = [{}]
+
+    let bacteriaSequenceLengths = [{}];
 
     let virusLengths = [{}];
 
@@ -319,6 +319,7 @@ for bacteria_name in bacteria_names:
 
     let occurrenceData = {};
     """.format(
+        ",".join([quote_str(n) for n in bacteria_names]),
         ",".join(bacteria_lengths),
         ",".join(virus_lengths),
         json.dumps(integrations),

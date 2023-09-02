@@ -160,6 +160,7 @@ function buildAnnotations(
 }
 
 export function run(
+  bacteriaNames: string[],
   // {bacteriaSeqName: {starts: [], ends: [], ...} ...}
   integrationData: any,
   // {bacteriaSeqName: {starts: [], ends: [], ...} ...}
@@ -167,7 +168,7 @@ export function run(
   // {virusName: {starts: [], ends: [], ...} ...}
   viralGeneData: any,
   // [<L1>, <L2>, ...]
-  bacteriaLengths: any,
+  bacteriaSequenceLengths: any,
   // [<L1>, <L2>, ...]
   virusLengths: any,
   // {virusName: {starts: [], ends: []}, ...}
@@ -217,17 +218,14 @@ export function run(
   let occurrenceRelatedEnabled = true;
 
   function populateBacteriaList() {
-    const items: BacteriaNameItem[] = bacteriaSequenceNames.map(
-      (name: string) => {
-        return { label: name, group: "Bacteria" };
-      },
-    );
+    const items: BacteriaNameItem[] = bacteriaNames.map((name: string) => {
+      return { label: name, group: "Bacteria" };
+    });
 
     let inputForm = <HTMLInputElement>(
       document.getElementById("bacteria-selection")
     );
 
-    //@ts-ignore
     autocomplete<BacteriaNameItem>({
       input: inputForm,
       emptyMsg: "No items found",
@@ -238,16 +236,9 @@ export function run(
         item: BacteriaNameItem,
         input: HTMLInputElement | HTMLTextAreaElement,
       ) => {
-        // this function is called when the user clicks
-        // on an element in the autocomplete list
-        // input.value = item.label;
-        selectedBacteria = item.label;
-        input.blur();
-        render();
+        window.location.href = `./${item.label}.html`;
       },
       fetch: (text: string, update: Function) => {
-        // this function is called everytime there is a change
-        // in the form we have bound the autocompleter to
         text = text.toLowerCase();
         let suggestions = items.filter(
           (i: BacteriaNameItem) => i.label.toLowerCase().indexOf(text) !== -1,
@@ -277,17 +268,12 @@ export function run(
         item: BacteriaNameItem,
         input: HTMLInputElement | HTMLTextAreaElement,
       ) => {
-        // this function is called when the user clicks
-        // on an element in the autocomplete list
-        // input.value = item.label;
         inputLabel.innerHTML = `Sequence: ${item.label}`;
         selectedBacteria = item.label;
         input.blur();
         render();
       },
       fetch: (text: string, update: Function) => {
-        // this function is called everytime there is a change
-        // in the form we have bound the autocompleter to
         text = text.toLowerCase();
         let suggestions = items.filter(
           (i: BacteriaNameItem) => i.label.toLowerCase().indexOf(text) !== -1,
@@ -297,7 +283,7 @@ export function run(
     });
   }
 
-  // populateBacteriaList();
+  populateBacteriaList();
   populateSequenceList();
 
   let chartConfig = {
@@ -869,7 +855,7 @@ export function run(
       integrations,
       genes,
       start: 0,
-      end: bacteriaLengths[bacteriaIdx],
+      end: bacteriaSequenceLengths[bacteriaIdx],
       layout: integrationLayout,
       integrationRows,
       geneRows,
