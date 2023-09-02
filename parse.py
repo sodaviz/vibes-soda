@@ -101,11 +101,11 @@ class VsData:
                 target_dict["evalues"].append(evalue)
 
                 if query_name not in self.occurrences:
-                    self.occurrences[query_name] = [0] * query_length
+                    self.occurrences[query_name] = {"starts": [], "ends": []}
 
-                occurrences_list = self.occurrences[query_name]
-                for pos in range(query_start, query_end):
-                    occurrences_list[pos] += 1
+                occurrences_dict = self.occurrences[query_name]
+                occurrences_dict["starts"].append(query_start)
+                occurrences_dict["ends"].append(query_end)
 
     def parse_viral_gene_tsv(self, path: str):
         virus_name = name_from_path(path)
@@ -317,7 +317,7 @@ for bacteria_name in bacteria_names:
 
     let viralGeneData = {};
 
-    let occurrences = {};
+    let occurrenceData = {};
     """.format(
         ",".join(bacteria_lengths),
         ",".join(virus_lengths),

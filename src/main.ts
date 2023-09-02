@@ -55,12 +55,15 @@ function buildAnnotations(
   integrationsData: any,
   bacterialGeneData: any,
   viralGeneData: any,
+  virusLengths: number[],
+  occurrenceData: any,
 ) {
   let bacteriaSeqNames = [];
   let virusNames = [];
   let integrationAnnotations = [];
   let bacterialGeneAnnotations = [];
   let viralGeneAnnotations = [];
+  let occurrenceAnnotations = [];
 
   let idCount = 0;
 
@@ -87,9 +90,9 @@ function buildAnnotations(
 
     integrationAnnotations.push(annList);
 
-    annList = [];
-
     let bacterialGeneObj = bacterialGeneData[seqName];
+
+    annList = [];
     numAnn = bacterialGeneObj["starts"].length;
     for (let i = 0; i < numAnn; i++) {
       annList.push({
@@ -104,9 +107,9 @@ function buildAnnotations(
   }
 
   for (const virusName in viralGeneData) {
-    annList = [];
-
     virusNames.push(virusName);
+
+    annList = [];
     let viralGeneObj = viralGeneData[virusName];
     let numAnn = viralGeneObj["starts"].length;
     for (let i = 0; i < numAnn; i++) {
@@ -123,6 +126,27 @@ function buildAnnotations(
       });
     }
     viralGeneAnnotations.push(annList);
+
+    let occurrenceObj = occurrenceData[virusName];
+
+    let virusLength = virusLengths[virusNames.length - 1];
+    // ------------------------------------- + 1 for 1-based indexing
+    let occurrenceValues = Array(virusLength + 1).fill(0);
+    numAnn = occurrenceObj["starts"].length;
+    for (let i = 0; i < numAnn; i++) {
+      let start = occurrenceObj["starts"][i];
+      let end = occurrenceObj["ends"][i];
+      for (let pos = start; pos <= end; pos++) {
+        occurrenceValues[pos]++;
+      }
+    }
+
+    occurrenceAnnotations.push({
+      id: "occurrence-plot",
+      start: 0,
+      end: virusLength,
+      values: occurrenceValues,
+    });
   }
 
   return {
@@ -131,6 +155,7 @@ function buildAnnotations(
     integrationAnnotations,
     viralGeneAnnotations,
     bacterialGeneAnnotations,
+    occurrenceAnnotations,
   };
 }
 
@@ -145,21 +170,23 @@ export function run(
   bacteriaLengths: any,
   // [<L1>, <L2>, ...]
   virusLengths: any,
-  // {virusName: [<O1>, <O2>, ...], ...}
-  occurrences: any,
+  // {virusName: {starts: [], ends: []}, ...}
+  occurrenceData: any,
 ) {
   let params = buildAnnotations(
     integrationData,
     bacterialGeneData,
     viralGeneData,
+    virusLengths,
+    occurrenceData,
   );
 
-  console.log(params);
-  let bacteriaNames = params.bacteriaSeqNames;
+  let bacteriaSequenceNames = params.bacteriaSeqNames;
   let virusNames = params.virusNames;
   let integrationAnnotations = params.integrationAnnotations;
   let virusGeneAnnotations = params.viralGeneAnnotations;
   let bacteriaGeneAnnotations = params.bacterialGeneAnnotations;
+  let occurrenceAnnotations = params.occurrenceAnnotations;
 
   let occurrenceRows = 30;
   let colors = [
@@ -186,23 +213,19 @@ export function run(
 
   let selectedBacteria: string | undefined;
   let selectedIntegration: IntegrationAnnotation | undefined;
-  let occurrenceBacteriaInclusionMap: Map<string, boolean> = new Map();
 
-  let occurrenceBacteriaSelectionExpanded = false;
   let occurrenceRelatedEnabled = true;
 
   function populateBacteriaList() {
-    const items: BacteriaNameItem[] = bacteriaNames.map((name: string) => {
-      return { label: name, group: "Bacteria" };
-    });
+    const items: BacteriaNameItem[] = bacteriaSequenceNames.map(
+      (name: string) => {
+        return { label: name, group: "Bacteria" };
+      },
+    );
 
     let inputForm = <HTMLInputElement>(
       document.getElementById("bacteria-selection")
     );
-
-    let clearButton = <HTMLButtonElement>document.getElementById("clear");
-
-    clearButton.addEventListener("click", () => (inputForm.value = ""));
 
     //@ts-ignore
     autocomplete<BacteriaNameItem>({
@@ -211,10 +234,13 @@ export function run(
       minLength: 0,
       showOnFocus: true,
       disableAutoSelect: true,
-      onSelect: (item: BacteriaNameItem, input: HTMLInputElement) => {
+      onSelect: (
+        item: BacteriaNameItem,
+        input: HTMLInputElement | HTMLTextAreaElement,
+      ) => {
         // this function is called when the user clicks
         // on an element in the autocomplete list
-        input.value = item.label;
+        // input.value = item.label;
         selectedBacteria = item.label;
         input.blur();
         render();
@@ -231,7 +257,48 @@ export function run(
     });
   }
 
-  populateBacteriaList();
+  function populateSequenceList() {
+    const items: BacteriaNameItem[] = bacteriaSequenceNames.map(
+      (name: string) => {
+        return { label: name, group: "Sequence" };
+      },
+    );
+
+    let inputForm = <HTMLInputElement>document.getElementById("seq-selection");
+    let inputLabel = <HTMLSpanElement>document.getElementById("seq-label");
+
+    autocomplete<BacteriaNameItem>({
+      input: inputForm,
+      emptyMsg: "No items found",
+      minLength: 0,
+      showOnFocus: true,
+      disableAutoSelect: true,
+      onSelect: (
+        item: BacteriaNameItem,
+        input: HTMLInputElement | HTMLTextAreaElement,
+      ) => {
+        // this function is called when the user clicks
+        // on an element in the autocomplete list
+        // input.value = item.label;
+        inputLabel.innerHTML = `Sequence: ${item.label}`;
+        selectedBacteria = item.label;
+        input.blur();
+        render();
+      },
+      fetch: (text: string, update: Function) => {
+        // this function is called everytime there is a change
+        // in the form we have bound the autocompleter to
+        text = text.toLowerCase();
+        let suggestions = items.filter(
+          (i: BacteriaNameItem) => i.label.toLowerCase().indexOf(text) !== -1,
+        );
+        update(suggestions);
+      },
+    });
+  }
+
+  // populateBacteriaList();
+  populateSequenceList();
 
   let chartConfig = {
     zoomable: true,
@@ -485,7 +552,7 @@ export function run(
       soda.clickBehavior({
         chart: this,
         annotations: params.genes,
-        click: (s, d) => {
+        click: (_, d) => {
           let rowSelection = d3.select<HTMLElement, any>(`tr#row-${d.a.id}`);
           let rowElement = rowSelection.node();
           if (rowElement == undefined) {
@@ -546,27 +613,6 @@ export function run(
     selectedIntegration = annotation;
     addSelectedIntegrationOutline();
 
-    let phageName = selectedIntegration.virusName;
-
-    // find the bacteria that have at least one integration of the selected
-    // phage
-    let bacteriaNameSubset = bacteriaNames.filter((name) => {
-      let bacteriaIdx = bacteriaNames.indexOf(name);
-      let annotations = integrationAnnotations[bacteriaIdx];
-      for (const ann of annotations) {
-        if (ann.virusName == phageName) {
-          return true;
-        }
-      }
-      return false;
-    });
-
-    occurrenceBacteriaInclusionMap = new Map();
-    for (const bacteriaName of bacteriaNameSubset) {
-      occurrenceBacteriaInclusionMap.set(bacteriaName, true);
-    }
-
-    renderOccurrenceBacteriaSelection(bacteriaNameSubset);
     renderOccurrence();
   }
 
@@ -588,44 +634,7 @@ export function run(
     let phageName = selectedIntegration.virusName;
     let phageIdx = virusNames.indexOf(phageName);
     let phageLength = virusLengths[phageIdx];
-
-    // ----------------------
-    // occurrence annotations
-    // ----------------------
-
-    // find the annotations for each integration of the selected phage
-    //   - we search across integration annotations of each bacterial genome
-    //   - we exclude bacterial genomes that are not in the inclusion map
-    let integrations = integrationAnnotations.reduce<IntegrationAnnotation[]>(
-      (accumulatedIntegrations, currentIntegrations, bacteriaIdx) => {
-        let bacteriaName = bacteriaNames[bacteriaIdx];
-        if (occurrenceBacteriaInclusionMap.get(bacteriaName) == true) {
-          let matches = currentIntegrations.filter(
-            (a: IntegrationAnnotation) => a.virusName == phageName,
-          );
-
-          return accumulatedIntegrations.concat(matches);
-        } else {
-          return accumulatedIntegrations;
-        }
-      },
-      [],
-    );
-
-    // +1 for 1-based indexing
-    let occurrenceValues = new Array(phageLength + 1).fill(0);
-    for (const ann of integrations) {
-      for (let i = ann.virusStart; i <= ann.virusEnd; i++) {
-        occurrenceValues[i]++;
-      }
-    }
-
-    let occurrences: soda.PlotAnnotation = {
-      id: "occurrence-plot",
-      start: 0,
-      end: phageLength,
-      values: occurrenceValues,
-    };
+    let occurrences = occurrenceAnnotations[phageIdx];
 
     let selected: soda.PlotAnnotation = soda.slicePlotAnnotations({
       annotations: [occurrences],
@@ -640,7 +649,7 @@ export function run(
     // -------------------
     let related: soda.Annotation[] = [];
     if (occurrenceRelatedEnabled) {
-      let selectedBacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
+      let selectedBacteriaIdx = bacteriaSequenceNames.indexOf(selectedBacteria);
 
       let relatedIntegrations = integrationAnnotations[
         selectedBacteriaIdx
@@ -667,7 +676,6 @@ export function run(
       virusEnd: selectedIntegration.virusEnd,
       rowCount: occurrenceRows,
     };
-
     occurrencesChart.render(params);
     renderTable(params);
   }
@@ -772,104 +780,6 @@ export function run(
       .style("padding", "1px 0.5em");
   }
 
-  bindButtonListeners();
-
-  function bindButtonListeners() {
-    d3.select("button#vibes-occurrence-expand-button")
-      .html(() => {
-        if (occurrenceBacteriaSelectionExpanded) {
-          return "－";
-        } else {
-          return "＋";
-        }
-      })
-      .on("click", toggleOccurrenceControls);
-
-    d3.select("button#vibes-occurrence-select-all-button").on("click", () =>
-      toggleAllOccurrenceBacteriaSelections(true),
-    );
-
-    d3.select("button#vibes-occurrence-select-none-button").on("click", () =>
-      toggleAllOccurrenceBacteriaSelections(false),
-    );
-
-    let relatedToggle = d3.select<HTMLInputElement, any>(
-      "input#vibes-occurrence-related-toggle",
-    );
-    relatedToggle.on("change", () => {
-      occurrenceRelatedEnabled = relatedToggle.node()!.checked;
-      renderOccurrence();
-    });
-  }
-
-  function toggleOccurrenceControls() {
-    let buttonSelection = d3.select("button#vibes-occurrence-expand-button");
-    let outerSelection = d3.select("#vibes-occurrence-select");
-
-    occurrenceBacteriaSelectionExpanded = !occurrenceBacteriaSelectionExpanded;
-
-    if (occurrenceBacteriaSelectionExpanded) {
-      buttonSelection.html("－");
-      outerSelection
-        .transition()
-        .duration(100)
-        .style("height", "500px")
-        .style("width", "500px");
-    } else {
-      buttonSelection.html("＋");
-      outerSelection
-        .transition()
-        .duration(100)
-        .style("height", "29px")
-        .style("width", "34px");
-    }
-  }
-
-  function toggleAllOccurrenceBacteriaSelections(state: boolean) {
-    for (const bacteriaName of occurrenceBacteriaInclusionMap.keys()) {
-      occurrenceBacteriaInclusionMap.set(bacteriaName, state);
-    }
-    d3.select("div#vibes-occurrence-select-inner")
-      .selectAll<any, string>("div.selection")
-      .style("font-weight", (d) =>
-        occurrenceBacteriaInclusionMap.get(d) == true ? "bold" : "normal",
-      );
-    renderOccurrence();
-  }
-
-  function renderOccurrenceBacteriaSelection(names: string[]) {
-    let innerSelection = d3.select("div#vibes-occurrence-select-inner");
-    innerSelection.selectAll("div.selection").remove();
-
-    innerSelection
-      .selectAll("div.selection")
-      .data(names)
-      .enter()
-      .append("div")
-      .attr("class", "selection")
-      .html((d) => d)
-      .style("margin-top", "5px")
-      .style("font-weight", (d) =>
-        occurrenceBacteriaInclusionMap.get(d) == true ? "bold" : "normal",
-      )
-      .on("mouseover", (d, i, nodes) => {
-        d3.select(nodes[i]).style("background-color", "cadetblue");
-      })
-      .on("mouseout", (d, i, nodes) => {
-        d3.select(nodes[i]).style("background-color", "white");
-      })
-      .on("mousedown", (d, i, nodes) => {
-        occurrenceBacteriaInclusionMap.set(
-          d,
-          !occurrenceBacteriaInclusionMap.get(d),
-        );
-        d3.select(nodes[i]).style("font-weight", () =>
-          occurrenceBacteriaInclusionMap.get(d) == true ? "bold" : "normal",
-        );
-        renderOccurrence();
-      });
-  }
-
   function aggregateBacteriaGenes(
     chart: soda.Chart<any>,
     genes: BacterialGeneAnnotation[],
@@ -934,7 +844,7 @@ export function run(
       return;
     }
 
-    let bacteriaIdx = bacteriaNames.indexOf(selectedBacteria);
+    let bacteriaIdx = bacteriaSequenceNames.indexOf(selectedBacteria);
     let integrations = integrationAnnotations[bacteriaIdx];
     let genes = bacteriaGeneAnnotations[bacteriaIdx];
 
@@ -982,7 +892,7 @@ export function run(
     // click behavior for setting the active annotation
     soda.clickBehavior({
       annotations: integrations,
-      click(s, d): void {
+      click(_, d): void {
         setSelectedIntegration(d.a);
       },
     });
