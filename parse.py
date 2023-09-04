@@ -72,7 +72,7 @@ class VsData:
                 # full_length = bool(tokens[4])
                 query_start = int(tokens[5])
                 query_end = int(tokens[6])
-                query_length = int(tokens[7])
+                # query_length = int(tokens[7])
                 target_name = tokens[9]
                 target_start = start
                 target_end = end
@@ -278,6 +278,12 @@ vibes_soda_bundle = open("./vibes-soda.js").read()
 template_html = open("./src/template.html").read()
 blob = template_html.replace("VIBES_SODA_TARGET", vibes_soda_bundle)
 
+
+with open("./data/bacteria.js", "w") as out:
+    out.write(
+        "bacteriaNames = [{}];".format(",".join([quote_str(n) for n in bacteria_names]))
+    ),
+
 # for every bacterial genome
 for bacteria_name in bacteria_names:
     bacteria_seq_names = list(data.integrations[bacteria_name].keys())
@@ -292,6 +298,7 @@ for bacteria_name in bacteria_names:
         virus_names += integrations[seq_name]["virusNames"]
 
     virus_names = list(set(virus_names))
+    virus_names.sort()
     virus_lengths = [str(data.virus_lengths[name]) for name in virus_names]
 
     viral_genes = {}
@@ -305,7 +312,7 @@ for bacteria_name in bacteria_names:
             occurrences[name] = data.occurrences[name]
 
     data_str = """
-    let bacteriaNames = [{}]
+    let bacteriaName = "{}";
 
     let bacteriaSequenceLengths = [{}];
 
@@ -319,7 +326,7 @@ for bacteria_name in bacteria_names:
 
     let occurrenceData = {};
     """.format(
-        ",".join([quote_str(n) for n in bacteria_names]),
+        bacteria_name,
         ",".join(bacteria_lengths),
         ",".join(virus_lengths),
         json.dumps(integrations),

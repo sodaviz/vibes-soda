@@ -136,11 +136,17 @@ function buildAnnotations(
     for (let i = 0; i < numAnn; i++) {
       let start = occurrenceObj["starts"][i];
       let end = occurrenceObj["ends"][i];
+      if (end > virusLength) {
+        console.log(
+          "virus length error:",
+          virusName,
+          `${end} > ${virusLength}`,
+        );
+      }
       for (let pos = start; pos <= end; pos++) {
         occurrenceValues[pos]++;
       }
     }
-
     occurrenceAnnotations.push({
       id: "occurrence-plot",
       start: 0,
@@ -160,6 +166,7 @@ function buildAnnotations(
 }
 
 export function run(
+  bacteriaName: string,
   bacteriaNames: string[],
   // {bacteriaSeqName: {starts: [], ends: [], ...} ...}
   integrationData: any,
@@ -212,7 +219,7 @@ export function run(
   let linearChartTimeoutId: number | undefined;
   let radialChartTimeoutId: number | undefined;
 
-  let selectedBacteria: string | undefined;
+  let selectedSequence: string | undefined;
   let selectedIntegration: IntegrationAnnotation | undefined;
 
   let occurrenceRelatedEnabled = true;
@@ -225,6 +232,9 @@ export function run(
     let inputForm = <HTMLInputElement>(
       document.getElementById("bacteria-selection")
     );
+    let inputLabel = <HTMLSpanElement>document.getElementById("bacteria-label");
+
+    inputLabel.innerHTML = `Bacteria: ${bacteriaName}`;
 
     autocomplete<BacteriaNameItem>({
       input: inputForm,
@@ -232,10 +242,7 @@ export function run(
       minLength: 0,
       showOnFocus: true,
       disableAutoSelect: true,
-      onSelect: (
-        item: BacteriaNameItem,
-        input: HTMLInputElement | HTMLTextAreaElement,
-      ) => {
+      onSelect: (item: BacteriaNameItem, _) => {
         window.location.href = `./${item.label}.html`;
       },
       fetch: (text: string, update: Function) => {
@@ -256,7 +263,6 @@ export function run(
     );
 
     let inputForm = <HTMLInputElement>document.getElementById("seq-selection");
-    let inputLabel = <HTMLSpanElement>document.getElementById("seq-label");
 
     autocomplete<BacteriaNameItem>({
       input: inputForm,
@@ -264,14 +270,8 @@ export function run(
       minLength: 0,
       showOnFocus: true,
       disableAutoSelect: true,
-      onSelect: (
-        item: BacteriaNameItem,
-        input: HTMLInputElement | HTMLTextAreaElement,
-      ) => {
-        inputLabel.innerHTML = `Sequence: ${item.label}`;
-        selectedBacteria = item.label;
-        input.blur();
-        render();
+      onSelect: (item: BacteriaNameItem, _) => {
+        selectSequence(item.label);
       },
       fetch: (text: string, update: Function) => {
         text = text.toLowerCase();
@@ -281,6 +281,13 @@ export function run(
         update(suggestions);
       },
     });
+  }
+
+  function selectSequence(sequenceName: string) {
+    let inputLabel = <HTMLSpanElement>document.getElementById("seq-label");
+    inputLabel.innerHTML = `Sequence: ${sequenceName}`;
+    selectedSequence = sequenceName;
+    render();
   }
 
   populateBacteriaList();
@@ -603,7 +610,7 @@ export function run(
   }
 
   function renderOccurrence() {
-    if (selectedBacteria == undefined) {
+    if (selectedSequence == undefined) {
       console.error(
         "selectedBacteria is undefined in call to renderOccurrence()",
       );
@@ -635,7 +642,7 @@ export function run(
     // -------------------
     let related: soda.Annotation[] = [];
     if (occurrenceRelatedEnabled) {
-      let selectedBacteriaIdx = bacteriaSequenceNames.indexOf(selectedBacteria);
+      let selectedBacteriaIdx = bacteriaSequenceNames.indexOf(selectedSequence);
 
       let relatedIntegrations = integrationAnnotations[
         selectedBacteriaIdx
@@ -825,12 +832,12 @@ export function run(
   function render() {
     clear();
 
-    if (selectedBacteria == undefined) {
+    if (selectedSequence == undefined) {
       console.error("selectedBacteria is undefined in call to render()");
       return;
     }
 
-    let bacteriaIdx = bacteriaSequenceNames.indexOf(selectedBacteria);
+    let bacteriaIdx = bacteriaSequenceNames.indexOf(selectedSequence);
     let integrations = integrationAnnotations[bacteriaIdx];
     let genes = bacteriaGeneAnnotations[bacteriaIdx];
 
@@ -891,4 +898,6 @@ export function run(
     // we'll just default to setting the first phage annotation as "active"
     setSelectedIntegration(integrationAnnotations[bacteriaIdx][0]);
   }
+
+  selectSequence(bacteriaSequenceNames[0]);
 }
