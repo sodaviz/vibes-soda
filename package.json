@@ -10,7 +10,7 @@
   "author": "Jack Roddy",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "@sodaviz/soda": "^0.13.1",
+    "@sodaviz/soda": "../soda",
     "@types/d3": "^5.7.2",
     "d3": "5.15.0",
     "autocompleter": "^6.1.2",

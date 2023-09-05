@@ -127,11 +127,18 @@
         </div>
       </div>
       <div id="charts" style="width: 100%">
-        <div id="vibes-top"></div>
-        <div id="vibes-mid" style="display: flex">
-          <div id="vibes-radial" style="width: 50%"></div>
-          <div id="vibes-occurrence" style="width: 50%"></div>
+        <div id="vibes-top">
+          <div id="vibes-ref"></div>
+          <div id="vibes-linear"></div>
         </div>
+        <div
+          id="vibes-mid"
+          style="display: flex; justify-content: space-between"
+        >
+          <div id="vibes-radial" style="flex: 1"></div>
+          <div id="vibes-occurrence" style="flex: 1"></div>
+        </div>
+        <button id="swap">freaky</button>
         <div id="vibes-bottom"></div>
       </div>
     </div>

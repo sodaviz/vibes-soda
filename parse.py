@@ -1,19 +1,51 @@
+import argparse
+import os
 import glob
 import json
 
-prefix_cnt = {}
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Produce SODA-based visualizations from the output of the VIBES pipeline"
+    )
 
-def new_id(prefix: str) -> str:
-    global prefix_cnt
-    if prefix in prefix_cnt:
-        id_cnt = prefix_cnt[prefix]
-        prefix_cnt[prefix] += 1
-    else:
-        prefix_cnt[prefix] = 1
-        id_cnt = 0
+    parser.add_argument(
+        type=str,
+        help="The top-level directory of VIBES output files",
+        dest="vibes_output_dir",
+        metavar="<dir>",
+    )
 
-    return f'"{prefix}-{id_cnt}"'
+    parser.add_argument(
+        "-b",
+        type=str,
+        help="Path to the VIBES-SODA JavaScript bundle",
+        metavar="<bundle.js>",
+        dest="bundle",
+        default="./vibes-soda.js",
+    )
+
+    parser.add_argument(
+        "-t",
+        type=str,
+        help="Path to the template HTML file",
+        metavar="<template.html>",
+        dest="template",
+        default="./template.html",
+    )
+
+    parser.add_argument(
+        "-o",
+        type=str,
+        help="Path to the output directory",
+        metavar="<dir>",
+        dest="outdir",
+        default="./viz",
+    )
+
+    args = parser.parse_args()
+
+    return args
 
 
 def quote_str(string: str) -> str:
@@ -246,94 +278,103 @@ class VsData:
                 # target_dict["evalues"].append(evalue)
 
 
-data = VsData()
+def main():
+    args = parse_args()
+    data = VsData()
 
-bacterial_gene_paths = glob.glob("./output/gff/*.gff")
-integrations_paths = glob.glob("./output/tsv/bacterial_integrations/*.tsv")
-viral_gene_paths = glob.glob("./output/tsv/viral_gene_annotations/*.tsv")
-
-bacterial_gene_paths.sort()
-integrations_paths.sort()
-viral_gene_paths.sort()
-
-integration_ann = {}
-viral_gene_ann = {}
-bacterial_gene_ann = []
-
-for path in integrations_paths:
-    data.parse_integration_tsv(path)
-
-for path in viral_gene_paths:
-    data.parse_viral_gene_tsv(path)
-
-for path in bacterial_gene_paths:
-    data.parse_bacterial_gene_gff3(path)
-
-
-# these are the names of the input bacterial genome fasta files,
-# i.e. this is usually something like "Pseudomonas_blah_blah_blah_number"
-bacteria_names = list(data.integrations.keys())
-
-vibes_soda_bundle = open("./vibes-soda.js").read()
-template_html = open("./src/template.html").read()
-blob = template_html.replace("VIBES_SODA_TARGET", vibes_soda_bundle)
-
-
-with open("./data/bacteria.js", "w") as out:
-    out.write(
-        "bacteriaNames = [{}];".format(",".join([quote_str(n) for n in bacteria_names]))
-    ),
-
-# for every bacterial genome
-for bacteria_name in bacteria_names:
-    bacteria_seq_names = list(data.integrations[bacteria_name].keys())
-
-    bacteria_lengths = [str(data.bacteria_lengths[name]) for name in bacteria_seq_names]
-    integrations = data.integrations[bacteria_name]
-    bacterial_genes = data.bacterial_genes[bacteria_name]
-
-    # filter the viral genes that we need for this bacteria
-    virus_names = []
-    for seq_name in integrations:
-        virus_names += integrations[seq_name]["virusNames"]
-
-    virus_names = list(set(virus_names))
-    virus_names.sort()
-    virus_lengths = [str(data.virus_lengths[name]) for name in virus_names]
-
-    viral_genes = {}
-    for name in data.viral_genes:
-        if name in virus_names:
-            viral_genes[name] = data.viral_genes[name]
-
-    occurrences = {}
-    for name in data.occurrences:
-        if name in virus_names:
-            occurrences[name] = data.occurrences[name]
-
-    data_str = """
-    let bacteriaName = "{}";
-
-    let bacteriaSequenceLengths = [{}];
-
-    let virusLengths = [{}];
-
-    let integrationData = {};
-
-    let bacterialGeneData = {};
-
-    let viralGeneData = {};
-
-    let occurrenceData = {};
-    """.format(
-        bacteria_name,
-        ",".join(bacteria_lengths),
-        ",".join(virus_lengths),
-        json.dumps(integrations),
-        json.dumps(bacterial_genes),
-        json.dumps(viral_genes),
-        json.dumps(occurrences),
+    bacterial_gene_paths = glob.glob(f"./{args.vibes_output_dir}/gff/*.gff")
+    integrations_paths = glob.glob(
+        f"./{args.vibes_output_dir}/tsv/bacterial_integrations/*.tsv"
+    )
+    viral_gene_paths = glob.glob(
+        f"./{args.vibes_output_dir}/tsv/viral_gene_annotations/*.tsv"
     )
 
-    with open(f"./data/{bacteria_name}.html", "w") as out:
-        out.write(blob.replace("VIBES_DATA_TARGET", data_str))
+    bacterial_gene_paths.sort()
+    integrations_paths.sort()
+    viral_gene_paths.sort()
+
+    for path in integrations_paths:
+        data.parse_integration_tsv(path)
+
+    for path in viral_gene_paths:
+        data.parse_viral_gene_tsv(path)
+
+    for path in bacterial_gene_paths:
+        data.parse_bacterial_gene_gff3(path)
+
+    # these are the names of the input bacterial genome fasta files,
+    # i.e. this is usually something like "Pseudomonas_blah_blah_blah_number"
+    bacteria_names = list(data.integrations.keys())
+
+    vibes_soda_bundle = open(f"{args.bundle}").read()
+    template_html = open(f"{args.template}").read()
+    blob = template_html.replace("VIBES_SODA_TARGET", vibes_soda_bundle)
+
+    os.makedirs(f"{args.outdir}", exist_ok=True)
+
+    with open(f"{args.outdir}/bacteria.js", "w") as out:
+        out.write(
+            "bacteriaNames = [{}];".format(
+                ",".join([quote_str(n) for n in bacteria_names])
+            )
+        ),
+
+    # for every bacterial genome
+    for bacteria_name in bacteria_names:
+        bacteria_seq_names = list(data.integrations[bacteria_name].keys())
+
+        bacteria_lengths = [
+            str(data.bacteria_lengths[name]) for name in bacteria_seq_names
+        ]
+        integrations = data.integrations[bacteria_name]
+        bacterial_genes = data.bacterial_genes[bacteria_name]
+
+        # filter the viral genes that we need for this bacteria
+        virus_names = []
+        for seq_name in integrations:
+            virus_names += integrations[seq_name]["virusNames"]
+
+        virus_names = list(set(virus_names))
+        virus_names.sort()
+        virus_lengths = [str(data.virus_lengths[name]) for name in virus_names]
+
+        viral_genes = {}
+        for name in data.viral_genes:
+            if name in virus_names:
+                viral_genes[name] = data.viral_genes[name]
+
+        occurrences = {}
+        for name in data.occurrences:
+            if name in virus_names:
+                occurrences[name] = data.occurrences[name]
+
+        data_str = """
+        let bacteriaName = "{}";
+
+        let bacteriaSequenceLengths = [{}];
+
+        let virusLengths = [{}];
+
+        let integrationData = {};
+
+        let bacterialGeneData = {};
+
+        let viralGeneData = {};
+
+        let occurrenceData = {};
+        """.format(
+            bacteria_name,
+            ",".join(bacteria_lengths),
+            ",".join(virus_lengths),
+            json.dumps(integrations),
+            json.dumps(bacterial_genes),
+            json.dumps(viral_genes),
+            json.dumps(occurrences),
+        )
+
+        with open(f"{args.outdir}/{bacteria_name}.html", "w") as out:
+            out.write(blob.replace("VIBES_DATA_TARGET", data_str))
+
+
+main()

@@ -216,8 +216,16 @@ export function run(
   let geneAlignmentTopColor = colors[0];
   let geneAlignmentBottomColor = colors[1];
 
-  let linearChartTimeoutId: number | undefined;
+  enum Mode {
+    Circular,
+    Linear,
+  }
+
+  let viewMode = Mode.Circular;
+
   let radialChartTimeoutId: number | undefined;
+
+  let bacteriaRenderParams: BacteriaRenderParams | undefined;
 
   let selectedSequence: string | undefined;
   let selectedIntegration: IntegrationAnnotation | undefined;
@@ -287,26 +295,21 @@ export function run(
     let inputLabel = <HTMLSpanElement>document.getElementById("seq-label");
     inputLabel.innerHTML = `Sequence: ${sequenceName}`;
     selectedSequence = sequenceName;
-    render();
+    renderSequence();
   }
 
   populateBacteriaList();
   populateSequenceList();
 
-  let chartConfig = {
-    zoomable: true,
+  let referenceChart = new soda.Chart<BacteriaRenderParams>({
     resizable: true,
     divOutline: "1px solid black",
     lowerPadSize: 5,
     rowHeight: 16,
-  };
-
-  let linearBacteriaChart = new soda.Chart<BacteriaRenderParams>({
-    ...chartConfig,
     upperPadSize: 25,
     leftPadSize: 0,
     rightPadSize: 0,
-    selector: "#vibes-top",
+    selector: "#vibes-ref",
     updateLayout(params) {
       this.layout = params.layout;
     },
@@ -325,67 +328,66 @@ export function run(
         strokeColor: phageColor,
       });
 
-      let { density, filteredGenes } = aggregateBacteriaGenes(
-        this,
-        params.genes,
-      );
-
       soda.rectangle({
         chart: this,
-        annotations: density,
-        selector: "bacteria-genes-aggregated",
-        fillColor: bacteriaGeneGroupColor,
-        fillOpacity: (d) => d.a.value,
-        row: params.integrationRows,
-        height: this.rowHeight * params.geneRows,
-      });
-
-      soda.rectangle({
-        chart: this,
-        annotations: filteredGenes,
+        annotations: params.genes,
         selector: "bacteria-genes",
         fillColor: bacteriaGeneColor,
       });
     },
-    postRender(): void {
-      this.defaultPostRender();
-      setChartHighlight(radialBacteriaChart, this);
-    },
-    postZoom(): void {
-      clearTimeout(linearChartTimeoutId);
-      linearChartTimeoutId = window.setTimeout(() => {
-        this.render({
-          ...this.renderParams,
-          updateDomain: false,
-        });
-        addSelectedIntegrationOutline();
-      }, 500);
-
-      setChartHighlight(radialBacteriaChart, this);
-    },
   });
 
-  let radialBacteriaChart = new soda.RadialChart<BacteriaRenderParams>({
-    ...chartConfig,
+  type ChartType =
+    | soda.Chart<BacteriaRenderParams>
+    | soda.RadialChart<BacteriaRenderParams>;
+
+  function updateLayout(this: ChartType, params: BacteriaRenderParams) {
+    this.layout = params.layout;
+  }
+
+  function updateDomain(this: ChartType, params: BacteriaRenderParams) {
+    if (params.updateDomain == true || params.updateDomain == undefined) {
+      this.defaultUpdateDomain(params);
+    }
+  }
+
+  function postRender(this: ChartType) {
+    this.defaultPostRender();
+    setChartHighlight(referenceChart, this);
+  }
+
+  function postZoom(this: ChartType) {
+    clearTimeout(radialChartTimeoutId);
+    radialChartTimeoutId = window.setTimeout(() => {
+      this.render({
+        ...this.renderParams,
+        updateDomain: false,
+      });
+      addSelectedIntegrationOutline();
+    }, 500);
+
+    setChartHighlight(referenceChart, this);
+  }
+
+  let radialConfig: soda.RadialChartConfig<BacteriaRenderParams> = {
     selector: "#vibes-radial",
+    resizable: true,
+    zoomable: true,
+    divOutline: "1px solid black",
     padSize: 50,
     trackHeightRatio: 0.15,
     axisConfig: {
       tickSizeOuter: 10,
       tickPadding: 15,
     },
-    updateLayout(params) {
-      this.layout = params.layout;
-    },
-    updateDomain(params) {
-      if (params.updateDomain == true || params.updateDomain == undefined) {
-        this.defaultUpdateDomain(params);
-      }
-    },
+    updateLayout,
+    updateDomain,
+    postZoom,
+    postRender,
     draw(params) {
       this.addAxis();
       let thisCasted = <soda.RadialChart<BacteriaRenderParams>>this;
-      // thisCasted.addTrackOutline();
+      thisCasted.addTrackOutline();
 
       soda.radialRectangle({
         chart: thisCasted,
@@ -406,7 +408,6 @@ export function run(
         fillColor: bacteriaGeneGroupColor,
         fillOpacity: (d) => d.a.value,
         row: params.integrationRows,
-        height: this.rowHeight * params.geneRows,
       });
 
       soda.radialRectangle({
@@ -421,34 +422,109 @@ export function run(
         text: (d) => `${d.a.name}`,
       });
     },
-    postRender(): void {
-      this.defaultPostRender();
-      setChartHighlight(linearBacteriaChart, this);
-    },
-    postZoom(): void {
-      clearTimeout(radialChartTimeoutId);
-      radialChartTimeoutId = window.setTimeout(() => {
-        this.render({
-          ...this.renderParams,
-          updateDomain: false,
-        });
-        addSelectedIntegrationOutline();
-      }, 500);
+  };
 
-      setChartHighlight(linearBacteriaChart, this);
+  let linearConfig: soda.ChartConfig<BacteriaRenderParams> = {
+    selector: "#vibes-linear",
+    resizable: true,
+    zoomable: true,
+    divOutline: "1px solid black",
+    lowerPadSize: 5,
+    rowHeight: 16,
+    upperPadSize: 25,
+    leftPadSize: 0,
+    rightPadSize: 0,
+    updateLayout,
+    updateDomain,
+    postZoom,
+    postRender,
+    draw(params) {
+      this.addAxis();
+
+      soda.rectangle({
+        chart: this,
+        annotations: params.integrations,
+        selector: "linear-bacteria-phages",
+        fillColor: phageColor,
+      });
+
+      let { density, filteredGenes } = aggregateBacteriaGenes(
+        this,
+        params.genes,
+      );
+
+      soda.rectangle({
+        chart: this,
+        annotations: density,
+        selector: "bacteria-genes-aggregated",
+        fillColor: bacteriaGeneGroupColor,
+        fillOpacity: (d) => d.a.value,
+        row: params.integrationRows,
+      });
+
+      soda.rectangle({
+        chart: this,
+        annotations: filteredGenes,
+        selector: "bacteria-genes",
+        fillColor: bacteriaGeneColor,
+      });
+
+      soda.tooltip({
+        annotations: filteredGenes,
+        text: (d) => `${d.a.name}`,
+      });
     },
-  });
+  };
+
+  let chart: ChartType = new soda.RadialChart<BacteriaRenderParams>(
+    radialConfig,
+  );
+
+  function swap() {
+    let domain = chart.domain;
+    let k = chart.transform.k;
+    chart.destroy();
+    if (viewMode == Mode.Circular) {
+      d3.select("#vibes-radial").style("flex", 0);
+      viewMode = Mode.Linear;
+      chart = new soda.Chart(linearConfig);
+    } else {
+      d3.select("#vibes-radial").style("flex", 1);
+      viewMode = Mode.Circular;
+      chart = new soda.RadialChart(radialConfig);
+    }
+
+    if (bacteriaRenderParams == undefined) {
+      throw "bacteriaRenderParams undefined in call to swap()";
+    }
+
+    chart.render(bacteriaRenderParams);
+    chart.transform.k = k;
+    chart.domain = domain;
+    chart.applyGlyphModifiers();
+    chart.postZoom();
+  }
+
+  const swapButton = document.getElementById("swap")!;
+
+  swapButton.addEventListener("click", swap);
 
   let occurrencesChart = new soda.Chart<VirusRenderParams>({
-    ...chartConfig,
+    zoomable: true,
+    resizable: true,
+    divOutline: "1px solid black",
+    lowerPadSize: 5,
+    rowHeight: 16,
     selector: "#vibes-occurrence",
     upperPadSize: 50,
     updateLayout() {},
     updateDimensions(params): void {
-      let height =
-        radialBacteriaChart.calculatePadHeight() -
-        this.upperPadSize -
-        this.lowerPadSize;
+      let height = 500;
+      if (viewMode == Mode.Circular) {
+        height =
+          chart.calculatePadHeight() - this.upperPadSize - this.lowerPadSize;
+      }
+
       this.rowHeight = height / occurrenceRows;
       this.defaultUpdateDimensions(params);
     },
@@ -573,7 +649,7 @@ export function run(
         this.divHeight = undefined;
         this.render(this._renderParams);
       } else {
-        this.divHeight = radialBacteriaChart.divHeight;
+        this.divHeight = chart.divHeight;
       }
     },
   });
@@ -824,22 +900,22 @@ export function run(
   function clear() {
     selectedIntegration = undefined;
     d3.select("div#vibes-bottom").selectAll("*").remove();
-    linearBacteriaChart.clear();
-    radialBacteriaChart.clear();
+    referenceChart.clear();
+    chart.clear();
     occurrencesChart.clear();
   }
 
-  function render() {
+  function renderSequence() {
     clear();
 
     if (selectedSequence == undefined) {
-      console.error("selectedBacteria is undefined in call to render()");
+      console.error("selectedSequence is undefined in call to render()");
       return;
     }
 
-    let bacteriaIdx = bacteriaSequenceNames.indexOf(selectedSequence);
-    let integrations = integrationAnnotations[bacteriaIdx];
-    let genes = bacteriaGeneAnnotations[bacteriaIdx];
+    let sequenceIdx = bacteriaSequenceNames.indexOf(selectedSequence);
+    let integrations = integrationAnnotations[sequenceIdx];
+    let genes = bacteriaGeneAnnotations[sequenceIdx];
 
     let integrationLayout = soda.intervalGraphLayout(integrations, 100);
     let integrationRows = integrationLayout.rowCount;
@@ -858,29 +934,18 @@ export function run(
     }
 
     // we use the same render params for the linear & radial bacteria charts
-    let bacteriaRenderParams = {
+    bacteriaRenderParams = {
       integrations,
       genes,
       start: 0,
-      end: bacteriaSequenceLengths[bacteriaIdx],
+      end: bacteriaSequenceLengths[sequenceIdx],
       layout: integrationLayout,
       integrationRows,
       geneRows,
     };
 
-    linearBacteriaChart.render(bacteriaRenderParams);
-    radialBacteriaChart.render(bacteriaRenderParams);
-
-    // hover behavior for highlighting phage annotations
-    soda.hoverBehavior({
-      annotations: integrations,
-      mouseover(s): void {
-        s.attr("fill", "maroon");
-      },
-      mouseout(s): void {
-        s.attr("fill", "black");
-      },
-    });
+    referenceChart.render(bacteriaRenderParams);
+    chart.render(bacteriaRenderParams);
 
     // click behavior for setting the active annotation
     soda.clickBehavior({
@@ -890,13 +955,8 @@ export function run(
       },
     });
 
-    soda.tooltip({
-      annotations: integrations,
-      text: (d) => `${d.a.virusName} ${d.a.virusStart} : ${d.a.virusEnd}`,
-    });
-
     // we'll just default to setting the first phage annotation as "active"
-    setSelectedIntegration(integrationAnnotations[bacteriaIdx][0]);
+    setSelectedIntegration(integrationAnnotations[sequenceIdx][0]);
   }
 
   selectSequence(bacteriaSequenceNames[0]);
