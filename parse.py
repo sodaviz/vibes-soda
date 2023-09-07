@@ -104,12 +104,14 @@ class VsData:
                 # full_length = bool(tokens[4])
                 query_start = int(tokens[5])
                 query_end = int(tokens[6])
-                # query_length = int(tokens[7])
+                query_length = int(tokens[7])
                 target_name = tokens[9]
                 target_start = start
                 target_end = end
                 target_length = int(tokens[12])
                 strand = tokens[13]
+
+                self.virus_lengths[query_name] = query_length
 
                 if target_name not in bacteria_dict:
                     self.bacteria_lengths[target_name] = target_length
@@ -178,10 +180,8 @@ class VsData:
                 # target_name = tokens[9]
                 target_start = start
                 target_end = end
-                target_length = int(tokens[12])
+                # target_length = int(tokens[12])
                 strand = tokens[13]
-
-                self.virus_lengths[virus_name] = target_length
 
                 virus_dict["starts"].append(target_start)
                 virus_dict["ends"].append(target_end)
@@ -199,13 +199,20 @@ class VsData:
 
         bacteria_dict = self.bacterial_genes[bacteria_name]
 
+        parsing_seq = False
+        seq = ""
         with open(path, "r") as f:
             lines = f.readlines()
             for line in lines[1:]:
+                if parsing_seq:
+                    seq += line.rstrip("\n")
+                    continue
+
                 if line.startswith("#"):
                     continue
                 elif line.startswith(">"):
-                    return
+                    parsing_seq = True
+                    continue
 
                 tokens = line.split("\t")
 
@@ -277,6 +284,9 @@ class VsData:
                 target_dict["strands"].append(strand)
                 # target_dict["evalues"].append(evalue)
 
+        if target_name not in self.bacteria_lengths:
+            self.bacteria_lengths[target_name] = len(seq)
+
 
 def main():
     args = parse_args()
@@ -322,7 +332,12 @@ def main():
 
     # for every bacterial genome
     for bacteria_name in bacteria_names:
-        bacteria_seq_names = list(data.integrations[bacteria_name].keys())
+        bacteria_seq_names = list(
+            set(
+                list(data.integrations[bacteria_name].keys())
+                + list(data.bacterial_genes[bacteria_name].keys())
+            )
+        )
 
         bacteria_lengths = [
             str(data.bacteria_lengths[name]) for name in bacteria_seq_names

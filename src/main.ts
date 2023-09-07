@@ -60,10 +60,12 @@ function buildAnnotations(
 ) {
   let bacteriaSeqNames = [];
   let virusNames = [];
-  let integrationAnnotations = [];
-  let bacterialGeneAnnotations = [];
-  let viralGeneAnnotations = [];
-  let occurrenceAnnotations = [];
+
+  let integrationAnnotations: Map<string, IntegrationAnnotation[]> = new Map();
+  let bacterialGeneAnnotations: Map<string, BacterialGeneAnnotation[]> =
+    new Map();
+  let viralGeneAnnotations: Map<string, ViralGeneAnnotation[]> = new Map();
+  let occurrenceAnnotations: Map<string, soda.PlotAnnotation> = new Map();
 
   let idCount = 0;
 
@@ -88,12 +90,16 @@ function buildAnnotations(
       });
     }
 
-    integrationAnnotations.push(annList);
+    integrationAnnotations.set(seqName, annList);
+  }
 
+  for (const seqName in bacterialGeneData) {
+    if (bacteriaSeqNames.indexOf(seqName) < 0) {
+      bacteriaSeqNames.push(seqName);
+    }
     let bacterialGeneObj = bacterialGeneData[seqName];
-
     annList = [];
-    numAnn = bacterialGeneObj["starts"].length;
+    let numAnn = bacterialGeneObj["starts"].length;
     for (let i = 0; i < numAnn; i++) {
       annList.push({
         id: `${idCount++}`,
@@ -103,7 +109,8 @@ function buildAnnotations(
         name: bacterialGeneObj["labels"][i],
       });
     }
-    bacterialGeneAnnotations.push(annList);
+
+    bacterialGeneAnnotations.set(seqName, annList);
   }
 
   for (const virusName in viralGeneData) {
@@ -125,7 +132,7 @@ function buildAnnotations(
         evalue: viralGeneObj["evalues"][i],
       });
     }
-    viralGeneAnnotations.push(annList);
+    viralGeneAnnotations.set(virusName, annList);
 
     let occurrenceObj = occurrenceData[virusName];
 
@@ -147,8 +154,9 @@ function buildAnnotations(
         occurrenceValues[pos]++;
       }
     }
-    occurrenceAnnotations.push({
-      id: "occurrence-plot",
+
+    occurrenceAnnotations.set(virusName, {
+      id: `${virusName}-occurrence`,
       start: 0,
       end: virusLength,
       values: occurrenceValues,
@@ -206,6 +214,12 @@ export function run(
     "#65bac6",
   ];
 
+  let linearOnText = "radial";
+  let radialOnText = "linear";
+
+  let relatedOnText = "show related";
+  let relatedOffText = "hide related";
+
   let outlineColor = colors[4];
   let virusGeneColor = colors[0];
   let occurrenceSelectedColor = colors[5];
@@ -217,13 +231,13 @@ export function run(
   let geneAlignmentBottomColor = colors[1];
 
   enum Mode {
-    Circular,
+    Radial,
     Linear,
   }
 
-  let viewMode = Mode.Circular;
+  let viewMode = Mode.Radial;
 
-  let radialChartTimeoutId: number | undefined;
+  let timeoutId: number | undefined;
 
   let bacteriaRenderParams: BacteriaRenderParams | undefined;
 
@@ -357,8 +371,8 @@ export function run(
   }
 
   function postZoom(this: ChartType) {
-    clearTimeout(radialChartTimeoutId);
-    radialChartTimeoutId = window.setTimeout(() => {
+    clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
       this.render({
         ...this.renderParams,
         updateDomain: false,
@@ -476,23 +490,39 @@ export function run(
     },
   };
 
-  let chart: ChartType = new soda.RadialChart<BacteriaRenderParams>(
-    radialConfig,
-  );
+  let chart: ChartType;
 
-  function swap() {
+  if (viewMode == Mode.Radial) {
+    chart = new soda.RadialChart<BacteriaRenderParams>(radialConfig);
+  } else if (viewMode == Mode.Linear) {
+    chart = new soda.Chart<BacteriaRenderParams>(linearConfig);
+  }
+
+  function setToggleChartText() {
+    if (viewMode == Mode.Radial) {
+      d3.select("#chart-toggle").html(`${radialOnText}`);
+    } else if (viewMode == Mode.Linear) {
+      d3.select("#chart-toggle").html(`${linearOnText}`);
+    }
+  }
+
+  setToggleChartText();
+
+  function toggleChart() {
     let domain = chart.domain;
     let k = chart.transform.k;
     chart.destroy();
-    if (viewMode == Mode.Circular) {
+    if (viewMode == Mode.Radial) {
       d3.select("#vibes-radial").style("flex", 0);
       viewMode = Mode.Linear;
       chart = new soda.Chart(linearConfig);
     } else {
       d3.select("#vibes-radial").style("flex", 1);
-      viewMode = Mode.Circular;
+      viewMode = Mode.Radial;
       chart = new soda.RadialChart(radialConfig);
     }
+
+    setToggleChartText();
 
     if (bacteriaRenderParams == undefined) {
       throw "bacteriaRenderParams undefined in call to swap()";
@@ -505,9 +535,26 @@ export function run(
     chart.postZoom();
   }
 
-  const swapButton = document.getElementById("swap")!;
+  const toggleChartButton = document.getElementById("chart-toggle")!;
+  toggleChartButton.addEventListener("click", toggleChart);
 
-  swapButton.addEventListener("click", swap);
+  function setToggleRelatedText() {
+    if (occurrenceRelatedEnabled) {
+      d3.select("#related-toggle").html(`${relatedOnText}`);
+    } else {
+      d3.select("#related-toggle").html(`${relatedOffText}`);
+    }
+  }
+
+  function toggleRelated() {
+    setToggleRelatedText();
+    occurrenceRelatedEnabled = !occurrenceRelatedEnabled;
+    renderOccurrence();
+  }
+
+  setToggleRelatedText();
+  const toggleRelatedButton = document.getElementById("related-toggle")!;
+  toggleRelatedButton.addEventListener("click", toggleRelated);
 
   let occurrencesChart = new soda.Chart<VirusRenderParams>({
     zoomable: true,
@@ -520,7 +567,7 @@ export function run(
     updateLayout() {},
     updateDimensions(params): void {
       let height = 500;
-      if (viewMode == Mode.Circular) {
+      if (viewMode == Mode.Radial) {
         height =
           chart.calculatePadHeight() - this.upperPadSize - this.lowerPadSize;
       }
@@ -700,10 +747,14 @@ export function run(
       return;
     }
 
-    let phageName = selectedIntegration.virusName;
-    let phageIdx = virusNames.indexOf(phageName);
-    let phageLength = virusLengths[phageIdx];
-    let occurrences = occurrenceAnnotations[phageIdx];
+    let virusName = selectedIntegration.virusName;
+    let virusIdx = virusNames.indexOf(virusName);
+    let virusLength = virusLengths[virusIdx];
+    let occurrences = occurrenceAnnotations.get(virusName);
+
+    if (occurrences == undefined) {
+      throw `no occurrences for ${virusName}`;
+    }
 
     let selected: soda.PlotAnnotation = soda.slicePlotAnnotations({
       annotations: [occurrences],
@@ -718,11 +769,15 @@ export function run(
     // -------------------
     let related: soda.Annotation[] = [];
     if (occurrenceRelatedEnabled) {
-      let selectedBacteriaIdx = bacteriaSequenceNames.indexOf(selectedSequence);
+      let integrations = integrationAnnotations.get(selectedSequence);
 
-      let relatedIntegrations = integrationAnnotations[
-        selectedBacteriaIdx
-      ].filter((a) => a.virusName == phageName && a != selectedIntegration);
+      if (integrations == undefined) {
+        throw `no integrations for ${selectedSequence}`;
+      }
+
+      let relatedIntegrations = integrations.filter(
+        (a) => a.virusName == virusName && a != selectedIntegration,
+      );
 
       related = relatedIntegrations.map((a) => {
         return {
@@ -733,13 +788,18 @@ export function run(
       });
     }
 
+    let genes = virusGeneAnnotations.get(virusName);
+    if (genes == undefined) {
+      throw `no viral genes for ${virusName}`;
+    }
+
     let params = {
       start: 0,
-      end: phageLength,
+      end: virusLength,
       occurrences,
       selected,
       related,
-      genes: virusGeneAnnotations[phageIdx],
+      genes,
       name: selectedIntegration.virusName,
       virusStart: selectedIntegration.virusStart,
       virusEnd: selectedIntegration.virusEnd,
@@ -914,8 +974,18 @@ export function run(
     }
 
     let sequenceIdx = bacteriaSequenceNames.indexOf(selectedSequence);
-    let integrations = integrationAnnotations[sequenceIdx];
-    let genes = bacteriaGeneAnnotations[sequenceIdx];
+    let integrations = integrationAnnotations.get(selectedSequence);
+    let genes = bacteriaGeneAnnotations.get(selectedSequence);
+
+    if (integrations == undefined) {
+      integrations = [];
+      console.warn(`no integrations for ${selectedSequence}`);
+    }
+
+    if (genes == undefined) {
+      genes = [];
+      console.warn(`no genes for ${selectedSequence}`);
+    }
 
     let integrationLayout = soda.intervalGraphLayout(integrations, 100);
     let integrationRows = integrationLayout.rowCount;
@@ -944,6 +1014,7 @@ export function run(
       geneRows,
     };
 
+    console.log(bacteriaRenderParams);
     referenceChart.render(bacteriaRenderParams);
     chart.render(bacteriaRenderParams);
 
@@ -956,7 +1027,8 @@ export function run(
     });
 
     // we'll just default to setting the first phage annotation as "active"
-    setSelectedIntegration(integrationAnnotations[sequenceIdx][0]);
+    let firstIntegration = integrations[0];
+    setSelectedIntegration(firstIntegration);
   }
 
   selectSequence(bacteriaSequenceNames[0]);
