@@ -511,6 +511,7 @@ export function run(
   function toggleChart() {
     let domain = chart.domain;
     let k = chart.transform.k;
+
     chart.destroy();
     if (viewMode == Mode.Radial) {
       d3.select("#vibes-radial").style("flex", 0);

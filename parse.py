@@ -1,7 +1,7 @@
 import argparse
-import os
 import glob
 import json
+import os
 
 
 def parse_args():
@@ -67,7 +67,7 @@ class VsData:
         self.bacteria_seq_names = {}
 
         # these are the lengths of the sequences in the fastas
-        self.bacteria_lengths = {}
+        self.bacteria_seq_lengths = {}
 
         self.virus_names = []
         self.virus_lengths = {}
@@ -114,7 +114,7 @@ class VsData:
                 self.virus_lengths[query_name] = query_length
 
                 if target_name not in bacteria_dict:
-                    self.bacteria_lengths[target_name] = target_length
+                    self.bacteria_seq_lengths[target_name] = target_length
                     bacteria_dict[target_name] = {
                         "starts": [],
                         "ends": [],
@@ -199,20 +199,39 @@ class VsData:
 
         bacteria_dict = self.bacterial_genes[bacteria_name]
 
-        parsing_seq = False
-        seq = ""
         with open(path, "r") as f:
             lines = f.readlines()
-            for line in lines[1:]:
-                if parsing_seq:
-                    seq += line.rstrip("\n")
-                    continue
 
-                if line.startswith("#"):
-                    continue
-                elif line.startswith(">"):
-                    parsing_seq = True
-                    continue
+            header_lines = [
+                line for line in lines if line.startswith("##sequence-region")
+            ]
+
+            for line in header_lines:
+                tokens = line.split(" ")
+                seq_name = tokens[1]
+                seq_length = int(tokens[3])
+                if seq_name in self.bacteria_seq_lengths:
+                    if seq_length != self.bacteria_seq_lengths[seq_name]:
+                        print(f"sequence length mismatch on: {seq_name}")
+                        print(f"  from gff3: {seq_length}")
+                        print(
+                            f"  from integration tsv: {self.bacteria_seq_lengths[seq_name]}"
+                        )
+                    self.bacteria_seq_lengths[seq_name] = seq_length
+                else:
+                    self.bacteria_seq_lengths[seq_name] = seq_length
+
+            if len(header_lines) == 0:
+                print(f"no sequence-region header lines found in gff file: {path}")
+                exit()
+
+            lines = [line for line in lines if not line.startswith("#")]
+
+            line_num = 1
+            for line in lines[1:]:
+                line_num += 1
+                if line.startswith(">"):
+                    break
 
                 tokens = line.split("\t")
 
@@ -284,9 +303,6 @@ class VsData:
                 target_dict["strands"].append(strand)
                 # target_dict["evalues"].append(evalue)
 
-        if target_name not in self.bacteria_lengths:
-            self.bacteria_lengths[target_name] = len(seq)
-
 
 def main():
     args = parse_args()
@@ -340,7 +356,7 @@ def main():
         )
 
         bacteria_lengths = [
-            str(data.bacteria_lengths[name]) for name in bacteria_seq_names
+            str(data.bacteria_seq_lengths[name]) for name in bacteria_seq_names
         ]
         integrations = data.integrations[bacteria_name]
         bacterial_genes = data.bacterial_genes[bacteria_name]
