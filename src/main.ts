@@ -317,7 +317,12 @@ export function run(
 
     let integrations = integrationAnnotations.get(selectedSequence);
 
-    const items: BacteriaNameItem[] = integrations!.map(
+    if (integrations == undefined) {
+      console.warn(`no integrations for ${selectedSequence}`);
+      integrations = [];
+    }
+
+    const items: BacteriaNameItem[] = integrations.map(
       (ann: IntegrationAnnotation) => {
         return {
           label: `${
@@ -872,6 +877,10 @@ export function run(
   }
 
   function selectIntegration(ann: IntegrationAnnotation) {
+    if (ann == undefined) {
+      console.warn("no annotation passed to selectIntegration()");
+      return;
+    }
     let inputLabel = <HTMLSpanElement>(
       document.getElementById("integration-label")
     );
@@ -927,7 +936,8 @@ export function run(
       let integrations = integrationAnnotations.get(selectedSequence);
 
       if (integrations == undefined) {
-        throw `no integrations for ${selectedSequence}`;
+        console.warn(`no integrations for ${selectedSequence}`);
+        return;
       }
 
       let relatedIntegrations = integrations.filter(
