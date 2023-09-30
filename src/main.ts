@@ -248,7 +248,7 @@ export function run(
 
   function populateBacteriaList() {
     const items: BacteriaNameItem[] = bacteriaNames.map((name: string) => {
-      return { label: name, group: "Bacteria" };
+      return { label: name, group: "Bacteria: type to search" };
     });
 
     let inputForm = <HTMLInputElement>(
@@ -265,6 +265,7 @@ export function run(
       showOnFocus: true,
       disableAutoSelect: true,
       onSelect: (item: BacteriaNameItem, _) => {
+        inputForm.blur();
         window.location.href = `./${item.label}.html`;
       },
       fetch: (text: string, update: Function) => {
@@ -280,7 +281,7 @@ export function run(
   function populateSequenceList() {
     const items: BacteriaNameItem[] = bacteriaSequenceNames.map(
       (name: string) => {
-        return { label: name, group: "Sequence" };
+        return { label: name, group: "Sequence: type to search" };
       },
     );
 
@@ -293,6 +294,7 @@ export function run(
       showOnFocus: true,
       disableAutoSelect: true,
       onSelect: (item: BacteriaNameItem, _) => {
+        inputForm.blur();
         selectSequence(item.label);
       },
       fetch: (text: string, update: Function) => {
@@ -305,10 +307,60 @@ export function run(
     });
   }
 
+  function populateIntegrationList() {
+    if (selectedSequence == undefined) {
+      console.error(
+        "selectedSequence is undefined in call to populateIntegrationList()",
+      );
+      return;
+    }
+
+    let integrations = integrationAnnotations.get(selectedSequence);
+
+    const items: BacteriaNameItem[] = integrations!.map(
+      (ann: IntegrationAnnotation) => {
+        return {
+          label: `${
+            ann.virusName
+          }: ${ann.start.toLocaleString()}..${ann.end.toLocaleString()}`,
+          ann,
+          group: "Integration: type to search",
+        };
+      },
+    );
+
+    let inputForm = <HTMLInputElement>(
+      document.getElementById("integration-selection")
+    );
+
+    autocomplete<BacteriaNameItem>({
+      input: inputForm,
+      emptyMsg: "No items found",
+      minLength: 0,
+      showOnFocus: true,
+      disableAutoSelect: true,
+      onSelect: (item: any, _) => {
+        inputForm.blur();
+        selectIntegration(item.ann);
+      },
+      fetch: (text: string, update: Function) => {
+        text = text.toLowerCase();
+        let suggestions = items.filter(
+          (i: BacteriaNameItem) => i.label.toLowerCase().indexOf(text) !== -1,
+        );
+        update(suggestions);
+      },
+    });
+  }
+
   function selectSequence(sequenceName: string) {
+    selectedSequence = sequenceName;
+
+    populateIntegrationList();
+
     let inputLabel = <HTMLSpanElement>document.getElementById("seq-label");
     inputLabel.innerHTML = `Sequence: ${sequenceName}`;
-    selectedSequence = sequenceName;
+
     renderSequence();
   }
 
@@ -337,7 +389,7 @@ export function run(
       soda.rectangle({
         chart: this,
         annotations: params.integrations,
-        selector: "linear-bacteria-phages",
+        selector: "reference-bacteria-phages",
         fillColor: phageColor,
         strokeColor: phageColor,
       });
@@ -435,6 +487,15 @@ export function run(
         annotations: filteredGenes,
         text: (d) => `${d.a.name}`,
       });
+
+      // click behavior for setting the active annotation
+      soda.clickBehavior({
+        chart: this,
+        annotations: params.integrations,
+        click(_, d): void {
+          selectIntegration(d.a);
+        },
+      });
     },
   };
 
@@ -486,6 +547,15 @@ export function run(
       soda.tooltip({
         annotations: filteredGenes,
         text: (d) => `${d.a.name}`,
+      });
+
+      // click behavior for setting the active annotation
+      soda.clickBehavior({
+        chart: this,
+        annotations: params.integrations,
+        click(_, d): void {
+          selectIntegration(d.a);
+        },
       });
     },
   };
@@ -539,6 +609,12 @@ export function run(
   const toggleChartButton = document.getElementById("chart-toggle")!;
   toggleChartButton.addEventListener("click", toggleChart);
 
+  const resetZoomButton = document.getElementById("reset-zoom")!;
+  resetZoomButton.addEventListener("click", () => {
+    chart.resetTransform();
+    chart.render({ ...chart.renderParams, updateDomain: true });
+  });
+
   function setToggleRelatedText() {
     if (occurrenceRelatedEnabled) {
       d3.select("#related-toggle").html(`${relatedOnText}`);
@@ -565,6 +641,7 @@ export function run(
     rowHeight: 16,
     selector: "#vibes-occurrence",
     upperPadSize: 50,
+    leftPadSize: 50,
     updateLayout() {},
     updateDimensions(params): void {
       let height = 500;
@@ -577,6 +654,7 @@ export function run(
       this.defaultUpdateDimensions(params);
     },
     draw(params): void {
+      this.clear();
       let geneLayout = soda.intervalGraphLayout(params.genes, 100);
 
       let relatedLayout = soda.intervalGraphLayout(params.related, 10);
@@ -641,11 +719,11 @@ export function run(
         chart: this,
         annotations: [params.selected],
         domain: [maxValue, 0],
-        strokeColor: occurrenceSelectedColor,
+        strokeColor: "none",
         selector: "occurrence-plot-selected",
         rowSpan: plotRows - horizontalAxisRowSpan,
         fillColor: occurrenceSelectedColor,
-        fillOpacity: 0.5,
+        fillOpacity: 0.2,
       });
 
       soda.rectangle({
@@ -654,6 +732,31 @@ export function run(
         selector: "occurrence-plot-related",
         fillColor: occurrenceRelatedColor,
         row: (d) => relatedLayout.row(d),
+        height: this.rowHeight / 2,
+      });
+
+      soda.hoverBehavior({
+        annotations: params.related,
+        mouseover: (s, d) => {
+          s.style("stroke", "green");
+          s.style("stroke-width", 2);
+          let glyphs = soda.queryGlyphMap({
+            annotations: [d.a],
+          })!;
+          for (const glyph of glyphs) {
+            glyph.style("stroke-width", 2);
+            glyph.style("stroke", "green");
+          }
+        },
+        mouseout: (s, d) => {
+          s.style("stroke", "none");
+          let glyphs = soda.queryGlyphMap({
+            annotations: [d.a],
+          })!;
+          for (const glyph of glyphs) {
+            glyph.style("stroke", "none");
+          }
+        },
       });
 
       soda.rectangle({
@@ -691,6 +794,49 @@ export function run(
         annotations: params.genes,
         text: (d) => `${d.a.name}`,
       });
+
+      let labelFontSize = this.rowHeight / 2 + 3;
+      let horizontalLabelSelection = this.overflowViewportSelection
+        .selectAll("text.horizontal-label")
+        .data(["horizontal-label"]);
+
+      horizontalLabelSelection
+        .enter()
+        .append("text")
+        .attr("class", "horizontal-label")
+        .text("sequence position (nt)")
+        .attr("text-anchor", "middle");
+
+      let horizontalLabelX =
+        this.viewportWidthPx / 2 - this.leftPadSize + this.rightPadSize;
+      let horizontalLabelY =
+        this.rowHeight * (plotRows - horizontalAxisRowSpan + 1.5) +
+        horizontalAxisYOffset;
+
+      horizontalLabelSelection
+        .attr("y", horizontalLabelY)
+        .attr("x", horizontalLabelX)
+        .attr("font-size", labelFontSize);
+
+      let verticalLabelSelection = this.overflowViewportSelection
+        .selectAll("text.vertical-label")
+        .data(["vertical-label"]);
+
+      verticalLabelSelection
+        .enter()
+        .append("text")
+        .attr("class", "vertical-label")
+        .text("position specific integrations (count)")
+        .attr("text-anchor", "middle");
+
+      let verticalLabelY = this.viewportHeightPx / 2 - this.upperPadSize;
+      let verticalLabelX = -25;
+
+      verticalLabelSelection
+        .attr("x", verticalLabelX)
+        .attr("y", verticalLabelY)
+        .attr("transform", `rotate(270 ${verticalLabelX} ${verticalLabelY})`)
+        .attr("font-size", labelFontSize);
     },
     postResize(): void {
       if (this._renderParams) {
@@ -725,9 +871,17 @@ export function run(
     }
   }
 
-  function setSelectedIntegration(annotation: IntegrationAnnotation) {
+  function selectIntegration(ann: IntegrationAnnotation) {
+    let inputLabel = <HTMLSpanElement>(
+      document.getElementById("integration-label")
+    );
+
+    inputLabel.innerHTML = `Viral integration: ${
+      ann.virusName
+    }: ${ann.start.toLocaleString()}..${ann.end.toLocaleString()}`;
+
     removeSelectedIntegrationOutline();
-    selectedIntegration = annotation;
+    selectedIntegration = ann;
     addSelectedIntegrationOutline();
 
     renderOccurrence();
@@ -794,6 +948,8 @@ export function run(
       throw `no viral genes for ${virusName}`;
     }
 
+    genes = genes.sort((a, b) => a.start - b.start);
+
     let params = {
       start: 0,
       end: virusLength,
@@ -807,6 +963,7 @@ export function run(
       rowCount: occurrenceRows,
     };
     occurrencesChart.render(params);
+
     renderTable(params);
   }
 
@@ -872,7 +1029,7 @@ export function run(
       let row = d3.select(nodes[i]);
       row.append("td").html(ann.name);
       row.append("td").html(`${ann.start}`);
-      row.append("td").html(`${ann.start + ann.end}`);
+      row.append("td").html(`${ann.end}`);
       row.append("td").html(`${ann.evalue.toExponential(2)}`);
       row.append("td").html(`${ann.modelStart}`);
       row.append("td").html(`${ann.modelEnd}`);
@@ -1015,21 +1172,12 @@ export function run(
       geneRows,
     };
 
-    console.log(bacteriaRenderParams);
     referenceChart.render(bacteriaRenderParams);
     chart.render(bacteriaRenderParams);
 
-    // click behavior for setting the active annotation
-    soda.clickBehavior({
-      annotations: integrations,
-      click(_, d): void {
-        setSelectedIntegration(d.a);
-      },
-    });
-
     // we'll just default to setting the first phage annotation as "active"
     let firstIntegration = integrations[0];
-    setSelectedIntegration(firstIntegration);
+    selectIntegration(firstIntegration);
   }
 
   selectSequence(bacteriaSequenceNames[0]);

@@ -105,12 +105,13 @@
         text-decoration: none;
         display: inline-block;
         margin: 4px;
-        padding: 6px 4px;
+        padding: 6px 6px;
         transition-duration: 0.4s;
         cursor: pointer;
         outline: none;
         background: var(--primary-color);
         color: white;
+        user-select: none;
       }
 
       .button:hover {
@@ -155,10 +156,28 @@
           style="display: flex; justify-content: space-between"
         >
           <div id="vibes-radial" style="flex: 1"></div>
-          <div id="vibes-occurrence" style="flex: 1"></div>
+          <div id="vibes-occurrence" style="flex: 1; position: relative">
+            <div
+              class="input"
+              style="position: absolute; top: -5px; left: 0; width: 90%"
+            >
+              <input
+                class="input-text"
+                type="text"
+                autocomplete="off"
+                required
+                id="integration-selection"
+              />
+              <span class="floating-label" id="integration-label"
+                >Viral integration</span
+              >
+              <span class="floating-arrow">&#x25BC;</span>
+            </div>
+          </div>
         </div>
         <div style="display: flex; justify-content: center">
           <span id="chart-toggle" class="button"></span>
+          <span id="reset-zoom" class="button">reset zoom</span>
           <span id="related-toggle" class="button"></span>
         </div>
         <div id="vibes-bottom"></div>
