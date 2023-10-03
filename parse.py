@@ -188,6 +188,7 @@ class ViralGene:
             end = tmp
 
         self.query_name = tokens[0]
+        self.description = tokens[1]
         self.accession = tokens[2]
         self.evalue = float(tokens[3])
         self.full_length = bool(tokens[4])
@@ -201,7 +202,7 @@ class ViralGene:
         self.strand = tokens[13]
 
     def to_string(self):
-        return "{},{},{},{},{},{},{},{},{}".format(
+        return "{},{},{},{},{},{},{},{},{},{}".format(
             self.target_start,
             self.target_end,
             self.query_start,
@@ -211,6 +212,7 @@ class ViralGene:
             self.evalue,
             self.query_name,
             self.accession,
+            self.description,
         )
 
 
@@ -402,19 +404,6 @@ def parse_records(args):
         }
 
         data_list.append(data)
-
-    # {
-    #   bacteriaName: "pseudomonas..."
-    #   occurrences: [ <occurrences filtered by integration in this genome> ],
-    #   viralGenes: [ <viral genes filtered by integration in this genome>]
-    #   sequences:
-    #     [
-    #       sequenceName: "chromosome"
-    #       sequenceLength: <n>,
-    #       integrations: [<s>, <s>, <s> ...]
-    #       genes: [<s>, <s>, <s> ...]
-    #    ],
-    # }
 
     return data_list
 

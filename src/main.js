@@ -56,7 +56,7 @@ let options = {
     occurrenceSelected: colors[5],
     occurrenceRelated: colors[3],
     bacteriaGene: colors[1],
-    bacteriaGeneGroup: colors[2],
+    bacteriaGeneGroup: colors[1],
     phage: colors[3],
     geneAlignmentTop: colors[1],
     geneAlignmentBottom: colors[0],
@@ -156,6 +156,7 @@ function prepareBacteria(seqs) {
         start: parseInt(tokens[0]),
         end: parseInt(tokens[1]),
         strand: tokens[2],
+        score: parseFloat(tokens[3]),
         name: tokens[4],
         product: tokens[6],
       };
@@ -212,6 +213,7 @@ function prepareVirus(data) {
         evalue: parseFloat(tokens[6]),
         name: tokens[7],
         accession: tokens[8],
+        description: tokens[9],
       };
     });
 
@@ -691,7 +693,9 @@ let occurrenceConfig = {
         `${d.a.name}: ` +
         `${d.a.queryStart.toLocaleString()}..${d.a.queryEnd.toLocaleString()}<br>` +
         `${d.a.start.toLocaleString()}..${d.a.end.toLocaleString()}<br>` +
-        `Strand: ${d.a.strand}<br>`,
+        `Strand: ${d.a.strand}<br>` +
+        `Accession: ${d.a.accession}<br>` +
+        `Description: ${d.a.description}<br>`,
     });
 
     soda.hoverBehavior({
