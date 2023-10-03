@@ -101,14 +101,6 @@ class Integration:
 
 class BacterialGene:
     def __init__(self, record: str):
-        tokens = record.split("\t")
-
-        meta_dict = {}
-        meta_tokens = tokens[8].split(";")
-        for meta_token in meta_tokens:
-            [key, val] = meta_token.split("=")
-            meta_dict[key] = val
-
         # gnl|Prokka|NDHMLNHN_1
         # Prodigal:002006
         # CDS
@@ -128,6 +120,14 @@ class BacterialGene:
         #   product=tRNA modification GTPase MnmE;
         #   protein_id=gnl|Prokka|NDHMLNHN_00001
 
+        tokens = record.split("\t")
+
+        meta_dict = {}
+        meta_tokens = tokens[8].split(";")
+        for meta_token in meta_tokens:
+            [key, val] = meta_token.split("=")
+            meta_dict[key] = val
+
         start = int(tokens[3])
         end = int(tokens[4])
 
@@ -140,8 +140,16 @@ class BacterialGene:
         self.target_start = start
         self.target_end = end
         self.strand = tokens[6]
-        self.id = meta_dict["locus_tag"]
-        self.score = float(tokens[7])
+
+        if "locus_tag" in meta_dict:
+            self.id = meta_dict["locus_tag"]
+        else:
+            self.id = ""
+
+        try:
+            self.score = float(tokens[7])
+        except ValueError:
+            self.score = 0.0
 
         if "product" in meta_dict:
             self.product = meta_dict["product"]
@@ -153,14 +161,12 @@ class BacterialGene:
         elif "Name" in meta_dict:
             self.query_name = meta_dict["Name"]
         else:
-            self.query_name = id
+            self.query_name = self.id
 
     def to_string(self):
-        return "{},{},{},{},{},{},{},{},{}".format(
+        return "{},{},{},{},{},{},{}".format(
             self.target_start,
             self.target_end,
-            self.query_start,
-            self.query_end,
             self.strand,
             self.score,
             self.query_name,
@@ -272,6 +278,8 @@ def parse_bacterial_gene_gff3(path: str) -> ([ViralGene], [Sequence]):
                 # the records at this point
                 break
 
+            genes.append(BacterialGene(line))
+
     return (genes, sequences)
 
 
@@ -371,22 +379,25 @@ def parse_records(args):
             )
         )
 
-        occurrences = [
-            {o.name: o.counts} for o in all_occurrences if o.name in virus_names
-        ]
+        occurrences = []
+        for virus in virus_names:
+            occ = [o for o in all_occurrences if o.name == virus]
+            assert len(occ) == 1
 
-        viral_genes = [
-            g.to_string() for g in all_viral_genes if g.target_name in virus_names
-        ]
-
-        for g in viral_genes:
-            print(g)
+            occurrences.append(
+                {
+                    "virusName": virus,
+                    "counts": occ[0].counts,
+                    "genes": [
+                        g.to_string() for g in all_viral_genes if g.target_name == virus
+                    ],
+                }
+            )
 
         data = {
             "bacteriaName": bacteria_name,
-            "occurrences": occurrences,
-            "viralGenes": viral_genes,
-            "sequences": sequences,
+            "virusData": occurrences,
+            "bacteriaData": sequences,
         }
 
         data_list.append(data)
@@ -407,7 +418,7 @@ def parse_records(args):
     return data_list
 
 
-def write_data(args, something):
+def write_data(args, data_list):
     # html stuff
     vibes_soda_bundle = open(f"{args.bundle}").read()
     template_html = open(f"{args.template}").read()
@@ -416,10 +427,9 @@ def write_data(args, something):
     # root output directory
     os.makedirs(f"{args.outdir}", exist_ok=True)
 
-    # TODO: GET BACTERIA NAMES
     # these are the names of the input bacterial genome fasta files,
     # i.e. this is usually something like "Pseudomonas_blah_blah_blah_number"
-    bacteria_names = []
+    bacteria_names = [l["bacteriaName"] for l in data_list]
 
     # sentinel file
     with open(f"{args.outdir}/bacteria.js", "w") as out:
@@ -429,8 +439,10 @@ def write_data(args, something):
             )
         ),
 
-    data_str = ""
-    for bacteria_name in bacteria_names:
+    for data in data_list:
+        bacteria_name = data["bacteriaName"]
+        json_str = json.dumps(data)
+        data_str = f"let data = {json_str};"
         with open(f"{args.outdir}/{bacteria_name}.html", "w") as out:
             out.write(viz_html.replace("VIBES_DATA_TARGET", data_str))
 
@@ -439,8 +451,8 @@ def write_data(args, something):
 
 def main():
     args = parse_args()
-    something = parse_records(args)
-    # write_data(args, something)
+    data_list = parse_records(args)
+    write_data(args, data_list)
 
 
 main()
