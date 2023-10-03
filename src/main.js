@@ -63,7 +63,9 @@ let options = {
   },
 };
 
-function relatedMouseover(a) {
+//
+//
+let relatedMouseover = (a) => {
   let glyphs = soda.queryGlyphMap({
     annotations: [a],
   });
@@ -71,9 +73,11 @@ function relatedMouseover(a) {
   glyphs.forEach((g) =>
     g.style("stroke-width", "2").style("stroke", options.colors.relatedOutline),
   );
-}
+};
 
-function relatedMouseout(a) {
+//
+//
+let relatedMouseout = (a) => {
   let glyphs = soda.queryGlyphMap({
     annotations: [a],
   });
@@ -85,6 +89,39 @@ function relatedMouseout(a) {
       g.style("stroke", "none");
     }
   });
+};
+
+export function run(data) {
+  state.bacteriaName = data.bacteriaName;
+  state.data.bacteria = prepareBacteria(data.bacteriaData);
+  state.data.virus = prepareVirus(data.virusData);
+
+  state.charts.reference = new soda.Chart(referenceConfig);
+  state.charts.occurrence = new soda.Chart(occurrenceConfig);
+  state.charts.main = new soda.RadialChart(radialConfig);
+
+  let toggleChartButton = document.getElementById("chart-toggle");
+  toggleChartButton.innerText = `${options.buttons.radialOnText}`;
+  toggleChartButton.addEventListener("click", toggleChart);
+
+  let toggleRelatedButton = document.getElementById("related-toggle");
+  toggleRelatedButton.innerText = `${options.buttons.relatedOnText}`;
+  toggleRelatedButton.addEventListener("click", toggleRelated);
+
+  let resetZoomButton = document.getElementById("reset-zoom");
+  resetZoomButton.addEventListener("click", () => {
+    state.charts.main.resetTransform();
+    state.charts.main.render({
+      ...state.currentBacteriaParams(),
+      updateDomain: true,
+    });
+  });
+
+  populateBacteriaList();
+  populateSequenceList();
+
+  let firstSequence = state.data.bacteria.sequenceNames[0];
+  selectSequence(firstSequence);
 }
 
 //
@@ -161,16 +198,6 @@ function prepareVirus(data) {
   for (const virus of data) {
     virusNames.push(virus.virusName);
 
-    // 0 self.target_start,
-    // 1 self.target_end,
-    // 2 self.query_start,
-    // 3 self.query_end,
-    // 4 self.query_length,
-    // 5 self.strand,
-    // 6 self.evalue,
-    // 7 self.query_name,
-    // 8 self.accession,
-
     let idCnt = 0;
     let genes = virus.genes.map((r) => {
       let tokens = r.split(",");
@@ -231,17 +258,20 @@ let commonConfig = {
         let start = domainStart + i * chunkWidth;
         let end = domainStart + (i + 1) * chunkWidth;
 
-        let value =
-          params.genes
-            .filter((a) => a.start >= start && a.end <= end)
-            .reduce((acc, curr) => acc + (curr.end - curr.start), 0) /
+        let inChunk = params.genes.filter(
+          (a) => a.start >= start && a.end <= end,
+        );
+
+        let densityValue =
+          inChunk.reduce((acc, curr) => acc + (curr.end - curr.start), 0) /
           chunkWidth;
 
         density.push({
-          id: `{agg-i}`,
+          id: `agg-${i}`,
           start,
           end,
-          value,
+          density: densityValue,
+          count: inChunk.length,
         });
       }
     } else {
@@ -264,8 +294,29 @@ let commonConfig = {
     this.defaultPostRender();
 
     soda.tooltip({
+      annotations: params.integrations,
+      text: (d) =>
+        `${d.a.name}: ` +
+        `${d.a.queryStart.toLocaleString()}..${d.a.queryEnd.toLocaleString()}<br>` +
+        `${d.a.start.toLocaleString()}..${d.a.end.toLocaleString()}<br>` +
+        `Strand: ${d.a.strand}<br>`,
+    });
+
+    soda.tooltip({
       annotations: params.filteredGenes,
-      text: (d) => `${d.a.name}`,
+      text: (d) =>
+        `${d.a.name}<br>` +
+        `${d.a.start.toLocaleString()}..${d.a.end.toLocaleString()}<br>` +
+        `Strand: ${d.a.strand}<br>` +
+        `Product: ${d.a.product}<br>`,
+    });
+
+    soda.tooltip({
+      annotations: params.density,
+      text: (d) =>
+        "Aggregated gene group<br>" +
+        `Density: ${d.a.density.toFixed(2)}<br>` +
+        `Count: ${d.a.count}<br>`,
     });
 
     soda.clickBehavior({
@@ -281,16 +332,14 @@ let commonConfig = {
       end: this.domain[1],
       selector: "highlight",
     });
-    this.postZoom();
   },
 
   postZoom() {
     clearTimeout(state.timeoutId);
     state.timeoutId = window.setTimeout(() => {
-      this.render({
-        ...this.renderParams,
-        updateDomain: false,
-      });
+      this.updateLayout(this.renderParams);
+      this.draw(this.renderParams);
+      this.postRender(this.renderParams);
     }, options.timeoutTime);
 
     state.charts.reference.highlight({
@@ -332,7 +381,7 @@ let linearConfig = {
       annotations: params.density,
       selector: "linear-gene-group",
       fillColor: options.colors.bacteriaGeneGroup,
-      fillOpacity: (d) => d.a.value,
+      fillOpacity: (d) => d.a.density,
       row: params.integrationRows,
     });
 
@@ -378,7 +427,7 @@ let radialConfig = {
       annotations: params.density,
       selector: "radial-gene-group",
       fillColor: options.colors.bacteriaGeneGroup,
-      fillOpacity: (d) => d.a.value,
+      fillOpacity: (d) => d.a.density,
       row: params.integrationRows,
     });
 
@@ -636,6 +685,15 @@ let occurrenceConfig = {
   },
 
   postRender(params) {
+    soda.tooltip({
+      annotations: params.genes,
+      text: (d) =>
+        `${d.a.name}: ` +
+        `${d.a.queryStart.toLocaleString()}..${d.a.queryEnd.toLocaleString()}<br>` +
+        `${d.a.start.toLocaleString()}..${d.a.end.toLocaleString()}<br>` +
+        `Strand: ${d.a.strand}<br>`,
+    });
+
     soda.hoverBehavior({
       annotations: params.related,
       mouseover: (_, d) => relatedMouseover(d.a),
@@ -652,7 +710,7 @@ let occurrenceConfig = {
           throw `Table row element on ${d.a.id} is null or undefined`;
         } else {
           rowElement.scrollIntoView(false);
-          rowSelection.style("background-color", "yellow");
+          rowSelection.style("background-color", options.colors.virusGene);
           rowSelection
             .interrupt()
             .transition()
@@ -672,39 +730,6 @@ let occurrenceConfig = {
   },
 };
 
-export function run(data) {
-  state.bacteriaName = data.bacteriaName;
-  state.data.bacteria = prepareBacteria(data.bacteriaData);
-  state.data.virus = prepareVirus(data.virusData);
-
-  state.charts.reference = new soda.Chart(referenceConfig);
-  state.charts.occurrence = new soda.Chart(occurrenceConfig);
-  state.charts.main = new soda.RadialChart(radialConfig);
-
-  let toggleChartButton = document.getElementById("chart-toggle");
-  toggleChartButton.innerText = `${options.buttons.radialOnText}`;
-  toggleChartButton.addEventListener("click", toggleChart);
-
-  let toggleRelatedButton = document.getElementById("related-toggle");
-  toggleRelatedButton.innerText = `${options.buttons.relatedOnText}`;
-  toggleRelatedButton.addEventListener("click", toggleRelated);
-
-  let resetZoomButton = document.getElementById("reset-zoom");
-  resetZoomButton.addEventListener("click", () => {
-    state.charts.main.resetTransform();
-    state.charts.main.render({
-      ...state.currentBacteriaParams(),
-      updateDomain: true,
-    });
-  });
-
-  populateBacteriaList();
-  populateSequenceList();
-
-  let firstSequence = state.data.bacteria.sequenceNames[0];
-  selectSequence(firstSequence);
-}
-
 //
 //
 function selectSequence(name) {
@@ -714,6 +739,7 @@ function selectSequence(name) {
 
   let params = state.data.bacteria.params.get(name);
   state.charts.reference.render(params);
+  state.charts.main.domain = [params.start, params.end];
   state.charts.main.render(params);
 
   populateIntegrationList();
@@ -864,7 +890,7 @@ function populateIntegrationList() {
       input.blur();
       selectIntegration(item.ann);
     },
-    customize: (i, r, container) => {
+    customize: (_i, _r, container) => {
       let sel = d3.select(container).selectAll("div").filter(":not(.group)");
       sel
         .data(integrations)
