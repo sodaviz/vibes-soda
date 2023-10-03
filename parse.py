@@ -201,11 +201,12 @@ class ViralGene:
         self.strand = tokens[13]
 
     def to_string(self):
-        return "{},{},{},{},{},{},{},{}".format(
+        return "{},{},{},{},{},{},{},{},{}".format(
             self.target_start,
             self.target_end,
             self.query_start,
             self.query_end,
+            self.query_length,
             self.strand,
             self.evalue,
             self.query_name,

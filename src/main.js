@@ -3,27 +3,54 @@ import autocomplete from "autocompleter";
 import * as d3 from "d3";
 
 let colors = ["#ad5252", "#496279", "#afc7d9", "#e7a865", "#343434", "#65bac6"];
-let timeoutId = 0;
 
-let options = {
+let state = {
   viewMode: "radial",
+  timeoutId: 0,
+  relatedEnabled: true,
+  bacteriaName: undefined,
+  sequenceName: undefined,
+  autocompleter: undefined,
+  selectedIntegration: undefined,
   charts: {
     main: undefined,
     reference: undefined,
     occurrence: undefined,
   },
+  data: {
+    bacteria: {
+      sequenceNames: undefined,
+      params: undefined,
+    },
+    virus: {
+      names: undefined,
+      params: undefined,
+    },
+  },
+  currentBacteriaParams() {
+    return this.data.bacteria.params.get(this.sequenceName);
+  },
+  currentVirusParams() {
+    return this.data.virus.params.get(this.selectedIntegration.name);
+  },
+};
+
+let options = {
+  timeoutTime: 300,
   buttons: {
     linearOnText: "radial",
     radialOnText: "linear",
-    relatedOnText: "show related",
-    relatedOffText: "hide related",
+    relatedOffText: "show related",
+    relatedOnText: "hide related",
   },
-  occurrence: {
+  plots: {
     rows: 30,
     xAxisYOffset: -2,
     xAxisRows: 2,
   },
   colors: {
+    selectedOutline: colors[5],
+    relatedOutline: "green",
     outline: colors[4],
     virusGene: colors[0],
     occurrenceSelected: colors[5],
@@ -31,18 +58,43 @@ let options = {
     bacteriaGene: colors[1],
     bacteriaGeneGroup: colors[2],
     phage: colors[3],
-    geneAlignmentTop: colors[0],
-    geneAlignmentBottom: colors[1],
+    geneAlignmentTop: colors[1],
+    geneAlignmentBottom: colors[0],
   },
 };
+
+function relatedMouseover(a) {
+  let glyphs = soda.queryGlyphMap({
+    annotations: [a],
+  });
+
+  glyphs.forEach((g) =>
+    g.style("stroke-width", "2").style("stroke", options.colors.relatedOutline),
+  );
+}
+
+function relatedMouseout(a) {
+  let glyphs = soda.queryGlyphMap({
+    annotations: [a],
+  });
+
+  glyphs.forEach((g) => {
+    if (g.datum().a == state.selectedIntegration) {
+      g.style("stroke", options.colors.selectedOutline);
+    } else {
+      g.style("stroke", "none");
+    }
+  });
+}
+
 //
 //
 function prepareBacteria(seqs) {
-  let names = [];
-  let paramsMap = new Map();
+  let sequenceNames = [];
+  let params = new Map();
 
   for (const seq of seqs) {
-    names.push(seq.sequenceName);
+    sequenceNames.push(seq.sequenceName);
 
     let idCnt = 0;
     let integrations = seq.integrations.map((r) => {
@@ -87,7 +139,7 @@ function prepareBacteria(seqs) {
     });
     layout.rowCount = max + 2;
 
-    paramsMap.set(seq.sequenceName, {
+    params.set(seq.sequenceName, {
       start: 0,
       end: seq.sequenceLength,
       integrations,
@@ -97,17 +149,27 @@ function prepareBacteria(seqs) {
     });
   }
 
-  return [names, paramsMap];
+  return { sequenceNames, params };
 }
 
 //
 //
 function prepareVirus(data) {
-  let names = [];
-  let paramsMap = new Map();
+  let virusNames = [];
+  let params = new Map();
 
   for (const virus of data) {
-    names.push(virus.virusName);
+    virusNames.push(virus.virusName);
+
+    // 0 self.target_start,
+    // 1 self.target_end,
+    // 2 self.query_start,
+    // 3 self.query_end,
+    // 4 self.query_length,
+    // 5 self.strand,
+    // 6 self.evalue,
+    // 7 self.query_name,
+    // 8 self.accession,
 
     let idCnt = 0;
     let genes = virus.genes.map((r) => {
@@ -118,12 +180,17 @@ function prepareVirus(data) {
         end: parseInt(tokens[1]),
         queryStart: parseInt(tokens[2]),
         queryEnd: parseInt(tokens[3]),
+        queryLength: parseInt(tokens[4]),
         strand: tokens[5],
         evalue: parseFloat(tokens[6]),
         name: tokens[7],
+        accession: tokens[8],
       };
     });
-    paramsMap.set(virus.virusName, {
+
+    genes.sort((a, b) => a.start - b.start);
+
+    params.set(virus.virusName, {
       start: 0,
       end: virus.counts.length,
       occurrences: [
@@ -138,7 +205,7 @@ function prepareVirus(data) {
     });
   }
 
-  return [names, paramsMap];
+  return { virusNames, params };
 }
 
 //
@@ -193,26 +260,40 @@ let commonConfig = {
     }
   },
 
-  postRender() {
+  postRender(params) {
     this.defaultPostRender();
-    options.charts.reference.highlight({
+
+    soda.tooltip({
+      annotations: params.filteredGenes,
+      text: (d) => `${d.a.name}`,
+    });
+
+    soda.clickBehavior({
+      chart: this,
+      annotations: params.integrations,
+      click(_, d) {
+        selectIntegration(d.a);
+      },
+    });
+
+    state.charts.reference.highlight({
       start: this.domain[0],
       end: this.domain[1],
       selector: "highlight",
     });
+    this.postZoom();
   },
 
   postZoom() {
-    clearTimeout(timeoutId);
-    timeoutId = window.setTimeout(() => {
+    clearTimeout(state.timeoutId);
+    state.timeoutId = window.setTimeout(() => {
       this.render({
         ...this.renderParams,
         updateDomain: false,
       });
-      // addSelectedIntegrationOutline();
-    }, 500);
+    }, options.timeoutTime);
 
-    options.charts.reference.highlight({
+    state.charts.reference.highlight({
       start: this.domain[0],
       end: this.domain[1],
       selector: "highlight",
@@ -231,19 +312,25 @@ let linearConfig = {
   leftPadSize: 0,
   rightPadSize: 0,
   draw(params) {
+    this.clear();
     this.addAxis();
 
     soda.rectangle({
       chart: this,
       annotations: params.integrations,
-      selector: "linear-bacteria-phages",
+      selector: "linear-virus",
       fillColor: options.colors.phage,
+      strokeWidth: 2,
+      strokeColor: (d) =>
+        d.a == state.selectedIntegration
+          ? options.colors.selectedOutline
+          : "none",
     });
 
     soda.rectangle({
       chart: this,
       annotations: params.density,
-      selector: "bacteria-genes-aggregated",
+      selector: "linear-gene-group",
       fillColor: options.colors.bacteriaGeneGroup,
       fillOpacity: (d) => d.a.value,
       row: params.integrationRows,
@@ -252,21 +339,8 @@ let linearConfig = {
     soda.rectangle({
       chart: this,
       annotations: params.filteredGenes,
-      selector: "bacteria-genes",
+      selector: "linear-genes",
       fillColor: options.colors.bacteriaGene,
-    });
-
-    soda.tooltip({
-      annotations: params.filteredGenes,
-      text: (d) => `${d.a.name}`,
-    });
-
-    soda.clickBehavior({
-      chart: this,
-      annotations: params.integrations,
-      click(_, d) {
-        selectIntegration(d.a);
-      },
     });
   },
 };
@@ -283,20 +357,26 @@ let radialConfig = {
     tickPadding: 15,
   },
   draw(params) {
+    this.clear();
     this.addAxis();
     this.addTrackOutline();
 
     soda.radialRectangle({
       chart: this,
       annotations: params.integrations,
-      selector: "linear-bacteria-phages",
+      selector: "radial-virus",
       fillColor: options.colors.phage,
+      strokeWidth: 2,
+      strokeColor: (d) =>
+        d.a == state.selectedIntegration
+          ? options.colors.selectedOutline
+          : "none",
     });
 
     soda.radialRectangle({
       chart: this,
       annotations: params.density,
-      selector: "bacteria-genes-aggregated",
+      selector: "radial-gene-group",
       fillColor: options.colors.bacteriaGeneGroup,
       fillOpacity: (d) => d.a.value,
       row: params.integrationRows,
@@ -305,21 +385,8 @@ let radialConfig = {
     soda.radialRectangle({
       chart: this,
       annotations: params.filteredGenes,
-      selector: "bacteria-genes",
+      selector: "radial-genes",
       fillColor: options.colors.bacteriaGene,
-    });
-
-    soda.tooltip({
-      annotations: params.filteredGenes,
-      text: (d) => `${d.a.name}`,
-    });
-
-    soda.clickBehavior({
-      chart: this,
-      annotations: params.integrations,
-      click(_, d) {
-        selectIntegration(d.a);
-      },
     });
   },
 };
@@ -377,11 +444,11 @@ let occurrenceConfig = {
     let map = new Map();
     let geneLayout = soda.intervalGraphLayout(params.genes, 100);
     let geneRows = geneLayout.rowCount + 1;
-    let plotRows = options.occurrence.rows - geneRows;
+    let plotRows = options.plots.rows - geneRows;
 
     params.genes.forEach((a) => {
       let offset = geneLayout.rowCount - geneLayout.row({ a }) + 1;
-      map.set(a.id, options.occurrence.rows - offset);
+      map.set(a.id, options.plots.rows - offset);
     });
 
     let relatedLayout = soda.intervalGraphLayout(params.related, 10);
@@ -391,20 +458,22 @@ let occurrenceConfig = {
       map.set(a.id, plotRows - offset);
     });
 
+    // custom layout object
     this.layout = {
       row(d) {
         return map.get(d.a.id);
       },
     };
+
     // shading for selected integration
     params.shading = [
       {
         id: "plot-shading",
-        start: params.selected.queryStart,
-        end: params.selected.queryEnd,
+        start: state.selectedIntegration.queryStart,
+        end: state.selectedIntegration.queryEnd,
         values: params.occurrences[0].values.slice(
-          params.selected.queryStart,
-          params.selected.queryEnd,
+          state.selectedIntegration.queryStart,
+          state.selectedIntegration.queryEnd,
         ),
       },
     ];
@@ -417,43 +486,44 @@ let occurrenceConfig = {
       x: 0,
       y: 0,
       domain: [0, maxCount],
-      rowSpan: plotRows - options.occurrence.xAxisRows,
+      rowSpan: plotRows - options.plots.xAxisRows,
     };
 
     params.xAxis = {
       x: 0,
       y:
-        this.rowHeight * (plotRows - options.occurrence.xAxisRows) +
-        options.occurrence.xAxisYOffset,
+        this.rowHeight * (plotRows - options.plots.xAxisRows) +
+        options.plots.xAxisYOffset,
     };
 
     params.plot = {
       y: 0,
       domain: [maxCount, 0],
-      rowSpan: plotRows - options.occurrence.xAxisRows,
+      rowSpan: plotRows - options.plots.xAxisRows,
     };
   },
 
   updateRowCount() {
-    this.rowCount = options.occurrence.rows;
+    this.rowCount = options.plots.rows;
   },
 
   updateDimensions(params) {
     let height = 500;
-    if (options.viewMode == "radial") {
+    if (state.viewMode == "radial") {
       height =
-        options.charts.main.calculatePadHeight() -
+        state.charts.main.calculatePadHeight() -
         this.upperPadSize -
         this.lowerPadSize;
     }
 
-    this.rowHeight = height / options.occurrence.rows;
+    this.rowHeight = height / options.plots.rows;
     this.defaultUpdateDimensions(params);
   },
 
   draw(params) {
     this.clear();
 
+    // x-axis
     soda.horizontalAxis({
       chart: this,
       selector: "x-axis",
@@ -465,6 +535,7 @@ let occurrenceConfig = {
       ...params.xAxis,
     });
 
+    // y-axis
     soda.verticalAxis({
       chart: this,
       annotations: params.occurrences,
@@ -505,68 +576,23 @@ let occurrenceConfig = {
       height: this.rowHeight / 2,
     });
 
-    soda.clickBehavior({
-      chart: this,
-      annotations: params.genes,
-      click: (_, d) => {
-        let rowSelection = d3.select(`tr#row-${d.a.id}`);
-        let rowElement = rowSelection.node();
-        if (rowElement == undefined) {
-          throw `Table row element on ${d.a.id} is null or undefined`;
-        } else {
-          rowElement.scrollIntoView(false);
-          rowSelection.style("background-color", "yellow");
-          rowSelection
-            .interrupt()
-            .transition()
-            .duration(2000)
-            .style("background-color", null);
-        }
-      },
-    });
+    if (state.relatedEnabled) {
+      // related integrations
+      soda.rectangle({
+        chart: this,
+        annotations: params.related,
+        selector: "related",
+        fillColor: options.colors.occurrenceRelated,
+        height: this.rowHeight / 2,
+      });
+    }
 
-    // related integrations
-    soda.rectangle({
-      chart: this,
-      annotations: params.related,
-      selector: "related",
-      fillColor: options.colors.occurrenceRelated,
-      height: this.rowHeight / 2,
-    });
-
-    // soda.hoverBehavior({
-    //   annotations: params.related,
-    //   mouseover: (s, d) => {
-    //     s.style("stroke", "green");
-    //     s.style("stroke-width", 2);
-
-    //     let glyphs = soda.queryGlyphMap({
-    //       annotations: [d.a],
-    //     });
-
-    //     for (const glyph of glyphs) {
-    //       glyph.style("stroke-width", 2);
-    //       glyph.style("stroke", "green");
-    //     }
-    //   },
-    //   mouseout: (s, d) => {
-    //     s.style("stroke", "none");
-
-    //     let glyphs = soda.queryGlyphMap({
-    //       annotations: [d.a],
-    //     });
-
-    //     for (const glyph of glyphs) {
-    //       glyph.style("stroke", "none");
-    //     }
-    //   },
-    // });
-
+    // axis labels
     let labelFontSize = this.rowHeight / 2 + 3;
 
     let xLabelX =
       this.viewportWidthPx / 2 - this.leftPadSize + this.rightPadSize;
-    let xLabelY = params.xAxis.y;
+    let xLabelY = params.xAxis.y + this.rowHeight * 1.5;
 
     let yLabelX = -25;
     let yLabelY = this.viewportHeightPx / 2 - this.upperPadSize;
@@ -609,74 +635,153 @@ let occurrenceConfig = {
       .attr("font-size", labelFontSize);
   },
 
+  postRender(params) {
+    soda.hoverBehavior({
+      annotations: params.related,
+      mouseover: (_, d) => relatedMouseover(d.a),
+      mouseout: (_, d) => relatedMouseout(d.a),
+    });
+
+    soda.clickBehavior({
+      chart: this,
+      annotations: params.genes,
+      click: (_, d) => {
+        let rowSelection = d3.select(`tr#row-${d.a.id}`);
+        let rowElement = rowSelection.node();
+        if (rowElement == undefined) {
+          throw `Table row element on ${d.a.id} is null or undefined`;
+        } else {
+          rowElement.scrollIntoView(false);
+          rowSelection.style("background-color", "yellow");
+          rowSelection
+            .interrupt()
+            .transition()
+            .duration(2000)
+            .style("background-color", null);
+        }
+      },
+    });
+  },
   postResize() {
     if (this._renderParams) {
       this.divHeight = undefined;
       this.render(this._renderParams);
     } else {
-      this.divHeight = options.charts.main.divHeight;
+      this.divHeight = state.charts.main.divHeight;
     }
   },
 };
 
 export function run(data) {
-  let [seqNames, seqParamsMap] = prepareBacteria(data.bacteriaData);
-  let [virusNames, occParamsMap] = prepareVirus(data.virusData);
+  state.bacteriaName = data.bacteriaName;
+  state.data.bacteria = prepareBacteria(data.bacteriaData);
+  state.data.virus = prepareVirus(data.virusData);
 
-  options.charts.reference = new soda.Chart(referenceConfig);
-  options.charts.occurrence = new soda.Chart(occurrenceConfig);
-  options.charts.main = new soda.RadialChart(radialConfig);
+  state.charts.reference = new soda.Chart(referenceConfig);
+  state.charts.occurrence = new soda.Chart(occurrenceConfig);
+  state.charts.main = new soda.RadialChart(radialConfig);
 
-  populateBacteriaList(data.bacteriaName);
-  populateSequenceList(seqNames, selectSequence);
+  let toggleChartButton = document.getElementById("chart-toggle");
+  toggleChartButton.innerText = `${options.buttons.radialOnText}`;
+  toggleChartButton.addEventListener("click", toggleChart);
 
-  selectSequence(seqNames[0]);
-  selectIntegration(options.charts.main.renderParams.integrations[0].id);
+  let toggleRelatedButton = document.getElementById("related-toggle");
+  toggleRelatedButton.innerText = `${options.buttons.relatedOnText}`;
+  toggleRelatedButton.addEventListener("click", toggleRelated);
 
-  function selectSequence(name) {
-    let label = document.getElementById("seq-label");
-    label.innerHTML = `Sequence: ${name}`;
-
-    let params = seqParamsMap.get(name);
-    options.charts.reference.render(params);
-    options.charts.main.render(params);
-  }
-
-  function selectIntegration(id) {
-    let mainParams = options.charts.main.renderParams;
-    let selected = mainParams.integrations.find((a) => a.id == id);
-    let name = selected.name;
-    let related = mainParams.integrations
-      .filter((a) => a.name == name)
-      .map((a) => {
-        return {
-          ...a,
-          start: a.queryStart,
-          end: a.queryEnd,
-        };
-      });
-
-    params = occParamsMap.get(name);
-    options.charts.occurrence.render({
-      ...params,
-      selected,
-      related,
+  let resetZoomButton = document.getElementById("reset-zoom");
+  resetZoomButton.addEventListener("click", () => {
+    state.charts.main.resetTransform();
+    state.charts.main.render({
+      ...state.currentBacteriaParams(),
+      updateDomain: true,
     });
+  });
 
-    //renderTable(params);
-  }
+  populateBacteriaList();
+  populateSequenceList();
+
+  let firstSequence = state.data.bacteria.sequenceNames[0];
+  selectSequence(firstSequence);
 }
 
 //
 //
-function populateBacteriaList(bacteriaName) {
+function selectSequence(name) {
+  state.sequenceName = name;
+  let label = document.getElementById("seq-label");
+  label.innerHTML = `Sequence: ${name}`;
+
+  let params = state.data.bacteria.params.get(name);
+  state.charts.reference.render(params);
+  state.charts.main.render(params);
+
+  populateIntegrationList();
+
+  let firstIntegration = state.currentBacteriaParams().integrations[0];
+  selectIntegration(firstIntegration);
+}
+
+//
+//
+function selectIntegration(selected) {
+  if (state.selectedIntegration != undefined) {
+    let glyphs = soda.queryGlyphMap({
+      annotations: [state.selectedIntegration],
+    });
+    glyphs.forEach((g) => g.style("stroke", "none"));
+  }
+
+  if (selected == undefined) {
+    state.selectedIntegration = undefined;
+    state.charts.occurrence.clear();
+    return;
+  }
+
+  let bacteriaParams = state.currentBacteriaParams();
+  state.selectedIntegration = bacteriaParams.integrations.find(
+    (a) => a == selected,
+  );
+
+  let glyphs = soda.queryGlyphMap({ annotations: [state.selectedIntegration] });
+  glyphs.forEach((g) => g.style("stroke", options.colors.selectedOutline));
+
+  let name = state.selectedIntegration.name;
+
+  let label = document.getElementById("integration-label");
+  label.innerHTML =
+    `Viral integration:` +
+    `${state.selectedIntegration.name}: ` +
+    `${state.selectedIntegration.start.toLocaleString()}..` +
+    `${state.selectedIntegration.end.toLocaleString()} `;
+
+  let related = bacteriaParams.integrations
+    .filter((a) => a.name == name)
+    .map((a) => {
+      return {
+        ...a,
+        start: a.queryStart,
+        end: a.queryEnd,
+      };
+    });
+
+  params = state.data.virus.params.get(name);
+  params.related = related;
+  state.charts.occurrence.render(params);
+
+  renderTable(params);
+}
+
+//
+//
+function populateBacteriaList() {
   const items = bacteriaNames.map((name) => {
     return { label: name, group: "Bacteria: type to search" };
   });
 
   let form = document.getElementById("bacteria-selection");
   let label = document.getElementById("bacteria-label");
-  label.innerHTML = `Bacteria: ${bacteriaName}`;
+  label.innerHTML = `Bacteria: ${state.bacteriaName}`;
 
   autocomplete({
     input: form,
@@ -700,8 +805,8 @@ function populateBacteriaList(bacteriaName) {
 
 //
 //
-function populateSequenceList(seqNames, select) {
-  const items = seqNames.map((name) => {
+function populateSequenceList() {
+  const items = state.data.bacteria.sequenceNames.map((name) => {
     return { label: name, group: "Sequence: type to search" };
   });
 
@@ -715,7 +820,7 @@ function populateSequenceList(seqNames, select) {
     disableAutoSelect: true,
     onSelect: (item) => {
       input.blur();
-      select(item.label);
+      selectSequence(item.label);
     },
     fetch: (text, update) => {
       text = text.toLowerCase();
@@ -727,95 +832,98 @@ function populateSequenceList(seqNames, select) {
   });
 }
 
-// function fuckOff() {
-//   let timeoutId;
+//
+//
+function populateIntegrationList() {
+  if (state.autocompleter != undefined) {
+    state.autocompleter.destroy();
+  }
 
-//   function selectSequence(sequenceName) {
-//     selectedSequence = sequenceName;
+  let integrations = state.currentBacteriaParams().integrations;
 
-//     populateIntegrationList();
+  let items = integrations.map((ann) => {
+    return {
+      label:
+        `${ann.name}: ` +
+        `${ann.start.toLocaleString()}..` +
+        `${ann.end.toLocaleString()}`,
+      ann: ann,
+      group: "Integration: type to search",
+    };
+  });
 
-//     let inputLabel = document.getElementById("seq-label");
-//     inputLabel.innerHTML = `Sequence: ${sequenceName}`;
+  let input = document.getElementById("integration-selection");
 
-//     renderSequence();
-//   }
+  state.autocompleter = autocomplete({
+    input: input,
+    emptyMsg: "No items found",
+    minLength: 0,
+    showOnFocus: true,
+    disableAutoSelect: true,
+    onSelect: (item) => {
+      input.blur();
+      selectIntegration(item.ann);
+    },
+    customize: (i, r, container) => {
+      let sel = d3.select(container).selectAll("div").filter(":not(.group)");
+      sel
+        .data(integrations)
+        .on("mouseover", relatedMouseover)
+        .on("mouseout", relatedMouseout);
+    },
+    fetch: (text, update) => {
+      text = text.toLowerCase();
+      let suggestions = items.filter(
+        (i) => i.label.toLowerCase().indexOf(text) !== -1,
+      );
+      update(suggestions);
+    },
+  });
+}
 
-//   populateBacteriaList();
-//   populateSequenceList();
+//
+//
+function toggleChart() {
+  let domain = state.charts.main.domain;
+  let k = state.charts.main.transform.k;
 
-//   let chart;
+  state.charts.main.destroy();
+  if (state.viewMode == "radial") {
+    d3.select("#chart-toggle").html(`${options.buttons.linearOnText}`);
+    d3.select("#vibes-radial").style("flex", 0);
+    state.viewMode = "linear";
+    state.charts.main = new soda.Chart(linearConfig);
+  } else {
+    d3.select("#chart-toggle").html(`${options.buttons.radialOnText}`);
+    d3.select("#vibes-radial").style("flex", 1);
+    state.viewMode = "radial";
+    state.charts.main = new soda.RadialChart(radialConfig);
+  }
 
-//   if (viewMode == "radial") {
-//     chart = new soda.RadialChart(radialConfig);
-//   } else if (viewMode == "linear") {
-//     chart = new soda.Chart(linearConfig);
-//   }
+  let chart = state.charts.main;
+  let params = state.currentBacteriaParams();
 
-//   function setToggleChartText() {
-//     if (viewMode == "radial") {
-//       d3.select("#chart-toggle").html(`${radialOnText}`);
-//     } else if (viewMode == "linear") {
-//       d3.select("#chart-toggle").html(`${linearOnText}`);
-//     }
-//   }
+  chart.render(params);
+  chart.transform.k = k;
+  chart.domain = domain;
+  chart.applyGlyphModifiers();
+  chart.postZoom();
 
-//   setToggleChartText();
+  state.charts.occurrence.resize();
+}
 
-//   function toggleChart() {
-//     let domain = chart.domain;
-//     let k = chart.transform.k;
+function toggleRelated() {
+  if (state.relatedEnabled) {
+    d3.select("#related-toggle").html(`${options.buttons.relatedOffText}`);
+    state.relatedEnabled = false;
+  } else {
+    d3.select("#related-toggle").html(`${options.buttons.relatedOnText}`);
+    state.relatedEnabled = true;
+  }
 
-//     chart.destroy();
-//     if (viewMode == "radial") {
-//       d3.select("#vibes-radial").style("flex", 0);
-//       viewMode = "linear";
-//       chart = new soda.Chart(linearConfig);
-//     } else {
-//       d3.select("#vibes-radial").style("flex", 1);
-//       viewMode = "radial";
-//       chart = new soda.RadialChart(radialConfig);
-//     }
-
-//     setToggleChartText();
-
-//     if (bacteriaRenderParams == undefined) {
-//       throw "bacteriaRenderParams undefined in call to swap()";
-//     }
-
-//     chart.render(bacteriaRenderParams);
-//     chart.transform.k = k;
-//     chart.domain = domain;
-//     chart.applyGlyphModifiers();
-//     chart.postZoom();
-//   }
-
-//   const toggleChartButton = document.getElementById("chart-toggle");
-//   toggleChartButton.addEventListener("click", toggleChart);
-
-//   const resetZoomButton = document.getElementById("reset-zoom");
-//   resetZoomButton.addEventListener("click", () => {
-//     chart.resetTransform();
-//     chart.render({ ...chart.renderParams, updateDomain: true });
-//   });
-
-//   function setToggleRelatedText() {
-//     if (occurrenceRelatedEnabled) {
-//       d3.select("#related-toggle").html(`${relatedOnText}`);
-//     } else {
-//       d3.select("#related-toggle").html(`${relatedOffText}`);
-//     }
-//   }
-
-//   function toggleRelated() {
-//     setToggleRelatedText();
-//     occurrenceRelatedEnabled = !occurrenceRelatedEnabled;
-//     renderOccurrence();
-//   }
-
-//   setToggleRelatedText();
-//   const toggleRelatedButton = document.getElementById("related-toggle");
-//   toggleRelatedButton.addEventListener("click", toggleRelated);
+  let params = state.currentVirusParams();
+  state.charts.occurrence.render(params);
+}
 
 function renderTable(params) {
   let tableSelection = d3.select("div#vibes-bottom");
@@ -842,6 +950,7 @@ function renderTable(params) {
 
   let columns = [
     "Gene name",
+    "Strand",
     "Start (nt)",
     "End (nt)",
     "E-value",
@@ -878,12 +987,13 @@ function renderTable(params) {
   rows.each((ann, i, nodes) => {
     let row = d3.select(nodes[i]);
     row.append("td").html(ann.name);
+    row.append("td").html(`${ann.strand}`);
     row.append("td").html(`${ann.start}`);
     row.append("td").html(`${ann.end}`);
     row.append("td").html(`${ann.evalue.toExponential(2)}`);
-    row.append("td").html(`${ann.modelStart}`);
-    row.append("td").html(`${ann.modelEnd}`);
-    row.append("td").html(`${ann.modelLength}`);
+    row.append("td").html(`${ann.queryStart}`);
+    row.append("td").html(`${ann.queryEnd}`);
+    row.append("td").html(`${ann.queryLength}`);
 
     let aliRow = row
       .append("td")
@@ -898,8 +1008,8 @@ function renderTable(params) {
       .attr("y", 5)
       .attr("fill", options.colors.geneAlignmentTop);
 
-    let aliWidth = ((ann.modelEnd - ann.modelStart) / ann.modelLength) * 100;
-    let aliX = (ann.modelStart / ann.modelLength) * 100;
+    let aliWidth = ((ann.queryEnd - ann.queryStart) / ann.queryLength) * 100;
+    let aliX = (ann.queryStart / ann.queryLength) * 100;
 
     aliRow
       .append("rect")
